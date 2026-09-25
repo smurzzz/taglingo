@@ -41,6 +41,27 @@ Re-run these before considering any phase in `01-PHASE-PLAN.md` that touches `wo
 **Expected:** the Offline State screen/banner appears; no screen is left blank or stuck mid-load. Reconnecting restores normal function without requiring a full app restart.
 **Status:** ✅ (verified 2026-09-25 — root `useIsOffline` + full-screen `offline` route; demoable via Settings "Preview offline state")
 
+## Auth & Roles — Phase 3 (Clerk ↔ Supabase)
+
+> Scope: the Phase 2 `auth.uid()` model became the Clerk subject model. Migration
+> `20260926000000_clerk_auth.sql` widens `users.id`/FK `user_id`s to `text` (= Clerk
+> `sub`), drops `users.clerk_id`, and all policies now compare `auth.jwt()->>'sub'`.
+
+### CP-08 — First login creates the `users` row (`ensure_user`)
+**Steps:** signed-in client calls `SELECT public.ensure_user(...)`.
+**Expected:** upserts a `users` row whose `id` = the JWT `sub`; repeat calls preserve the row.
+**Status:** ✅ (verified live 2026-09-26 via Management API inside a transaction `set role authenticated` + simulated `request.jwt.claims` `{"sub":"user_test_a",...}`: `ensure_user` inserted the row, a second call for another `sub` created user B without touching A, and the transaction rolled back cleanly leaving `users` empty).
+
+### CP-09 — RLS reads/writes scoped to the Clerk `sub` claim
+**Steps:** as an authenticated client with `sub = user_test_a`, read/write rows as A and attempt to touch B's.
+**Expected:** reads return only A's rows; own-row INSERT/UPDATE succeed; cross-user write is rejected.
+**Status:** ✅ (verified live 2026-09-26 with simulated JWT claims: A saw only A's row after B was inserted; A's `word_progress` insert and `users` update succeeded; writing a `word_progress` row for B returned `42501 new row violates row-level security policy`.)
+
+### CP-10 — Client-side wiring (device)
+**Steps:** real account signs in (email code or Apple/Google), lands on Home Dashboard; Profile shows the real name/email/"Learning since"; Settings dark-mode/reminder toggle persists and re-applies.
+**Expected:** full flow works end to end.
+**Status:** ☐ (integration confirmed live 2026-09-26 — Supabase TPA entry present with issuer `https://optimal-halibut-3418.clerk.accounts.dev`, JWKS resolved; Clerk "Connect with Supabase" done. Just needs signing in on a device/Expo Go.)
+
 ## Streak & Aggregate Correctness Tests
 
 ### PS-01 — Streak counts consecutive days correctly
@@ -64,7 +85,7 @@ Re-run these before considering any phase in `01-PHASE-PLAN.md` that touches `wo
 |---|---|---|
 | Loading/empty/error states render on every list screen | `03-CODE-STANDARDS.md` §6 | ✅ (verified 2026-09-25, mock data) |
 | Mutation buttons disabled while in flight | Cross-screen rule | ✅ (verified 2026-09-25 — quiz `Next` gated on `resolved`; Grade/favorite apply synchronously against mock store) |
-| Settings (dark mode, reminder time) persist across app restart | Phase 3 | ☐ (Phase 3 — real backend persistence) |
+| Settings (dark mode, reminder time) persist across app restart | Phase 3 | 🔶 in progress (writes via `users` row through RLS; device persistence check pending CP-10) |
 | Push notification fires at the configured reminder time | Phase 6 | ☐ (Phase 6) |
 
 ## How to Run This Report
@@ -75,3 +96,4 @@ Re-run these before considering any phase in `01-PHASE-PLAN.md` that touches `wo
 ## Run Log
 - **2026-09-25 (Phase 1 — mock data):** CP-03, CP-04, CP-05, CP-06, CP-07, PS-02, PS-03 and the secondary list-screen checks pass against the static screens/mock fixtures. CP-01, CP-02, PS-01 remain deferred to their backend phases. Static verification only — re-run on a device with Phase 2 data before any later phase is marked complete.
 - **2026-09-25 (Phase 2 — live Supabase):** schema + seed applied to project `wvquienibojiphxamgnr` (`20260925000000_schema.sql`, `20260925000001_seed_words.sql`; migrations tracked in `supabase_migrations.schema_migrations`). Verified live: seed split Beginner 10 / Intermediate 8 / Advanced 5; CP-01 and CP-02 pass via PostgREST (see above); all other tables RLS-enabled with expected policies; anon/service-role behavior confirmed. PS-01 still deferred (Phase 4).
+- **2026-09-26 (Phase 3 — Clerk auth, DB layer):** migration `20260926000000_clerk_auth.sql` applied and registered; `src/types/database.ts` regenerated (users.id text, ensure_user RPC). CP-08 + CP-09 verified live at the SQL level inside rolled-back transactions with `set role authenticated` + simulated Clerk `request.jwt.claims`. Code wiring (auth facade, Clerk-bound Supabase client, email-code/OAuth login, Profile/Settings) typechecks and lints clean; CP-10 device verification deferred to the dashboard activation steps.

@@ -11,7 +11,7 @@ Living status doc. Update this after every work session — it should always ref
 | 0 — Environment & Installation | Empty app runs, connects to Supabase, connects to Clerk | In progress | Scaffold, deps, env wiring done (commit `fbed274`); lint/typecheck/expo-doctor 21/21/Android export all clean. Blocked on: user creates Supabase + Clerk projects and pastes real keys into `.env`; then verify live connections via Expo Go. |
 | 1 — All UI Screens (static) | Reviewer can tap through every screen using only mock data | Done | All 11 screens + offline state built and navigable via mock data (18 words across 3 levels, seeded progress). Verified `expo lint`, `tsc --noEmit`, `expo-doctor` 21/21 clean. Mock-applicable critical-path tests pass (see below). |
 | 2 — Data Layer, Schema & Word Seeding | `words` table live and seeded from CSV, RLS verified | Done | Migrations authored (`supabase/migrations/20260925000000_schema.sql` + `20260925000001_seed_words.sql`), applied to live project `wvquienibojiphxamgnr` via the Supabase Management API, and recorded in `supabase_migrations.schema_migrations` so `npx supabase db push` won't re-apply. Verified live: seed split Beginner 10 / Intermediate 8 / Advanced 5; all 5 tables RLS-enabled; CP-01 + CP-02 pass end-to-end via PostgREST (throwaway auth user, cleaned up); anon is fail-closed. `src/types/database.ts` regenerated to match. Lint/typecheck/expo-doctor clean. |
-| 3 — Auth & Roles | Real account logs in, lands on Home Dashboard, Profile reflects real data | Not started | |
+| 3 — Auth & Roles | Real account logs in, lands on Home Dashboard, Profile reflects real data | In progress | Code + DB live: migration `20260926000000_clerk_auth.sql` applied (users.id → text = Clerk `sub`, RLS via `auth.jwt()->>'sub'`, `ensure_user` RPC) and registered in `supabase_migrations.schema_migrations`; `src/types/database.ts` regenerated. New `src/lib/auth.tsx` + Clerk-bound `src/lib/supabase.ts` + `src/features/user/api.ts`; real Clerk login (`useSSO`, email-code); Profile/Settings wired; lint / tsc / expo-doctor clean. **Integration verified live:** Clerk↔Supabase Third Party Auth entry present via Management API (issuer `https://optimal-halibut-3418.clerk.accounts.dev`, type `clerk-development`, JWKS resolved); Clerk "Connect with Supabase" done. Only the final on-device login remains. |
 | 4 — Flashcard Study & Progress | Mastered word reflects instantly across Home/Browse/Progress | Not started | |
 | 5 — Definition Lookup & Quiz Mode | Full quiz runs end to end, missed word reviewable from results | Not started | |
 | 6 — Notifications & Offline State | Reminder fires; offline state shows correctly | Not started | |
@@ -42,7 +42,9 @@ Track expansion from the CSV template (23 starter words) toward the 200–300 wo
 | Advanced | 5 | ~60-100 |
 
 ## Known Blockers
-- **No local Supabase verification path** — Docker is not installed on this machine, so `supabase start`/`db lint`/locally-restarting PostgREST can't run. Phase 2 migrations were applied and verified live via the Supabase Management API instead. DB-level `npx supabase link` + `supabase db push` can't run without the Postgres password; prefer the Management API (`POST /v1/projects/<ref>/database/query`) for any future DDL.
+- **No local Supabase verification path** — Docker is not installed on this machine, so `supabase start`/`db lint`/locally-restarting PostgREST can't run. Phase 2/3 migrations were applied and verified live via the Supabase Management API instead. DB-level `npx supabase link` + `supabase db push` can't run without the Postgres password; prefer the Management API (`POST /v1/projects/<ref>/database/query`) for any future DDL.
+- **Clerk↔Supabase Third Party Auth** is now active — confirmed live via Management API `GET /config/auth/third-party-auth` (issuer `https://optimal-halibut-3418.clerk.accounts.dev`, type `clerk-development`, JWKS resolved). The Clerk instance is a **development** instance: correct for Expo Go testing, but the production Clerk instance needs its own Connect + TPA entry before release.
+- **Security: rotate the Supabase access token** — an earlier `.env.example` contained the real token (`sbp_df8a…`); it was redacted before commit but remains in local git history. Rotate it in Supabase → Account → Access Tokens and update `.env`.
 
 ## Open Decisions
 - [ ] Daily goal word count on Home Dashboard — hardcoded at 20 for v1; revisit if it should be user-configurable.
@@ -51,4 +53,4 @@ Track expansion from the CSV template (23 starter words) toward the 200–300 wo
 
 ---
 
-**Last updated:** 2026-09-25 (Phase 2 complete — schema + seed applied to live project `wvquienibojiphxamgnr` via Management API, migrations tracked, seed split + RLS verified end-to-end)
+**Last updated:** 2026-09-26 (Phase 3 code + DB done — Clerk-auth migration applied and verified live via Management API with simulated JWT claims; Clerk↔Supabase Third Party Auth integration confirmed live at `https://optimal-halibut-3418.clerk.accounts.dev`. Remaining: on-device login to close the exit criterion.)

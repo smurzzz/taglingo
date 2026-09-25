@@ -1,6 +1,8 @@
-// TagLingo database types — mirror supabase/migrations/0001_schema.sql.
+// TagLingo database types — mirror supabase/migrations/:
+//   20260925000000_schema.sql (tables/RLS), 20260925000001_seed_words.sql,
+//   20260926000000_clerk_auth.sql (Clerk sub as users.id, ensure_user RPC).
 //
-// Hand-maintained to match the Phase 2 schema. When a live Supabase project
+// Hand-maintained to match the applied schema. When a live Supabase project
 // exists, regenerate the canonical copy with:
 //   npx supabase gen types typescript --project-id <ref> --schema public > src/types/database.ts
 
@@ -12,7 +14,6 @@ export type Database = {
       users: {
         Row: {
           id: string;
-          clerk_id: string;
           email: string;
           full_name: string | null;
           dark_mode: boolean;
@@ -22,7 +23,6 @@ export type Database = {
         };
         Insert: {
           id: string;
-          clerk_id: string;
           email: string;
           full_name?: string | null;
           dark_mode?: boolean;
@@ -32,7 +32,6 @@ export type Database = {
         };
         Update: {
           id?: string;
-          clerk_id?: string;
           email?: string;
           full_name?: string | null;
           dark_mode?: boolean;
@@ -186,7 +185,15 @@ export type Database = {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      ensure_user: {
+        Args: {
+          p_full_name?: string | null;
+          p_email?: string | null;
+        };
+        Returns: Database['public']['Tables']['users']['Row'];
+      };
+    };
     Enums: {
       level: PublicLevel;
       word_status: WordStatus;

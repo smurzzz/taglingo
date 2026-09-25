@@ -7,8 +7,10 @@ import { BottomNav } from '@/components/taglingo/BottomNav';
 import { ScreenHeader } from '@/components/taglingo/ScreenHeader';
 import { Radius, Spacing } from '@/constants/theme';
 import { useAppState } from '@/lib/app-state';
+import { useAppAuth } from '@/lib/auth';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { formatTime } from '@/lib/utils';
+import { useUpdateAccountPreferences } from '@/features/user/api';
 
 function Stepper({
   value,
@@ -109,10 +111,21 @@ export default function SettingsScreen() {
   const router = useRouter();
   const theme = useThemeColors();
   const { state, actions } = useAppState();
+  const { signOut } = useAppAuth();
+  const persist = useUpdateAccountPreferences();
+
+  const applyReminder = (reminder: { enabled: boolean; time: string }) => {
+    actions.setReminder(reminder);
+    persist.mutate({ reminder_enabled: reminder.enabled, reminder_time: reminder.time });
+  };
+  const applyDarkMode = (value: boolean) => {
+    actions.setDarkMode(value);
+    persist.mutate({ dark_mode: value });
+  };
 
   const [hours, minutes] = state.reminder.time.split(':').map(Number);
   const setTime = (nextHours: number, nextMinutes: number) =>
-    actions.setReminder({
+    applyReminder({
       ...state.reminder,
       time: `${String(nextHours).padStart(2, '0')}:${String(nextMinutes).padStart(2, '0')}`,
     });
@@ -137,7 +150,7 @@ export default function SettingsScreen() {
             </View>
             <Switch
               value={state.reminder.enabled}
-              onValueChange={(enabled) => actions.setReminder({ ...state.reminder, enabled })}
+              onValueChange={(enabled) => applyReminder({ ...state.reminder, enabled })}
               trackColor={{ false: theme.muted, true: theme.primary }}
               thumbColor="#FFFFFF"
               accessibilityLabel="Daily reminder"
@@ -185,15 +198,15 @@ export default function SettingsScreen() {
             </AppText>
             <Switch
               value={state.darkMode}
-              onValueChange={actions.setDarkMode}
+              onValueChange={applyDarkMode}
               trackColor={{ false: theme.muted, true: theme.primary }}
               thumbColor="#FFFFFF"
               accessibilityLabel="Dark mode"
             />
           </View>
           <View style={styles.previews}>
-            <ThemePreview mode="light" active={!state.darkMode} onSelect={() => actions.setDarkMode(false)} />
-            <ThemePreview mode="dark" active={state.darkMode} onSelect={() => actions.setDarkMode(true)} />
+            <ThemePreview mode="light" active={!state.darkMode} onSelect={() => applyDarkMode(false)} />
+            <ThemePreview mode="dark" active={state.darkMode} onSelect={() => applyDarkMode(true)} />
           </View>
           <AppText variant="caption" muted style={styles.previewHint}>
             Tap a preview to switch light or dark theme.
@@ -226,8 +239,8 @@ export default function SettingsScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => {
-            actions.signOut();
+          onPress={async () => {
+            await signOut();
             router.replace('/login');
           }}
           style={({ pressed }) => [

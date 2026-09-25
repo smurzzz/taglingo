@@ -48,12 +48,22 @@ Each phase has a goal, tasks, and an exit criterion — don't start the next pha
 ---
 
 ## Phase 3 — Auth & Roles (wire the real thing)
-- [ ] Replace mock "Continue with email/Apple/Google" with real Clerk auth
-- [ ] Create `users` row on first login
-- [ ] Profile screen reads real session data
-- [ ] Settings screen (dark mode, reminder toggle) persists to `users` or a `user_settings` row
+- [x] Replace mock "Continue with email/Apple/Google" with real Clerk auth — `src/app/login.tsx` now runs the Clerk custom flow (email-code sign-in/sign-up with automatic transfer handling) plus Apple/Google via `useSSO()`. A thin `src/lib/auth.tsx` facade feeds Clerk state to screens; the mock store remains only as a no-keys dev fallback.
+- [x] Create `users` row on first login — `ensure_user()` SECURITY DEFINER RPC (`supabase/migrations/20260926000000_clerk_auth.sql`), called by `UserBootstrapper` in `src/app/_layout.tsx` after sign-in; id = Clerk `sub`.
+- [x] Profile screen reads real session data — `useAuthUser()` (`src/features/user/api.ts`) merges Clerk identity with the persisted `users` row; initials/name/email/"Learning since" all live.
+- [x] Settings screen (dark mode, reminder toggle) persists to `users` — `useUpdateAccountPreferences()` writes `dark_mode`/`reminder_enabled`/`reminder_time` through RLS (own row only).
 
-**Exit criterion:** a real account can log in, land on Home Dashboard, and Profile reflects real data.
+Schema: `20260926000000_clerk_auth.sql` (applied live 2026-09-26) widens `users.id`/FK `user_id` columns to `text` = Clerk subject id, drops the now-redundant `clerk_id`, and moves every RLS policy from `auth.uid()` to `auth.jwt()->>'sub'` so Supabase's Clerk third-party-auth provider (verifying Clerk-issued JWTs) gates rows correctly. Verified at the DB level with simulated JWT claims (ensure-user insert/first-login, own-row write, isolation, cross-user write blocked).
+
+**Exit criterion:** a real account can log in, land on Home Dashboard, and Profile reflects real data. **Status: code + DB done; provider integration verified live; final device E2E pending** — both dashboard integrations are now confirmed: Supabase-side Third Party Auth entry is live via Management API (issuer `https://optimal-halibut-3418.clerk.accounts.dev`, type `clerk-development`, JWKS resolved on `GET /config/auth/third-party-auth`), and the Clerk-side "Connect with Supabase" was done by the user (stamps `role: authenticated` on session tokens). The only remaining step is signing in on a device.
+
+Backend activation checklist (user, once):
+1. ✅ **Clerk dashboard** → your application → **Connect with Supabase** (enables the Supabase integration that stamps `role: authenticated` onto session tokens).
+2. ✅ **Supabase dashboard** → project `wvquienibojiphxamgnr` → Authentication → Sign In/Providers → **Third party auth** → **Add → Clerk** → pasted the Clerk instance domain `https://optimal-halibut-3418.clerk.accounts.dev`.
+3. **Clerk dashboard** → Native applications → ensure **Native API** is enabled — applies to Apple/Google OAuth; email-code login works regardless.
+4. **Clerk dashboard** → Redirect URLs — add the `taglingo://` custom-scheme callback URLs (and the Expo Go `exp://` URL for dev OAuth).
+
+> Note: the registered TPA is a **development** Clerk instance (`clerk-development`). That's correct for Expo Go testing, but before release the prod Clerk instance needs its own Connect + TPA entries (Clerk rotates dev-account keys, and dev sessions/billing differ).
 
 ---
 

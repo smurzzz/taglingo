@@ -24,8 +24,7 @@ TagLingo has a single authenticated role in v1: **Student Learner / Casual User*
 ### 3.1 `users`
 | Column | Type | Notes |
 |---|---|---|
-| `id` | uuid, PK | |
-| `clerk_id` | text, unique | Links to Clerk's user id |
+| `id` | text, PK | Clerk subject id (`sub` claim); written by `ensure_user()` on first login (Phase 3) |
 | `email` | text, unique | |
 | `full_name` | text | |
 | `dark_mode` | boolean | default `false` |
@@ -88,11 +87,14 @@ Quiz results are tracked **separately** from `word_progress` by design — a cor
 
 ## 4. Row-Level Security
 
-- `users`: a user can read/update only their own row.
+Auth note (Phase 3): Supabase is configured as the **Clerk third-party-auth provider**, so request tokens are Clerk JWTs (verified against the Clerk JWKS) whose `sub` is the Clerk user id and whose `role` is `authenticated`. RLS therefore compares against the JWT subject claim — `auth.jwt()->>'sub'` — not `auth.uid()`. Every FK that pointed at `users.id` is now `text` matching that claim.
+
+- `users`: a user can read/update only their own row (`id = auth.jwt()->>'sub'`).
 - `words`: `SELECT` open to all authenticated users; no client-side write grant at all.
-- `word_progress`: a user can `SELECT`/`INSERT`/`UPDATE` only rows where `user_id = auth.uid()`.
+- `word_progress`: a user can `SELECT`/`INSERT`/`UPDATE` only rows where `user_id = auth.jwt()->>'sub'`.
 - `study_sessions`: same pattern — a user can only read/write their own rows.
 - `quiz_attempts`: same pattern — insert/read own rows only.
+- `users` rows are created exclusively by the SECURITY DEFINER `public.ensure_user(...)` RPC (no INSERT policy on `users`; the client can only ever touch its own row).
 
 ## 5. Level Browsing & Completion
 

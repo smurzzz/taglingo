@@ -43,6 +43,7 @@ export interface AppState {
 export interface AppActions {
   signIn: (email: string) => void;
   signOut: () => void;
+  applyAccountPreferences: (prefs: { darkMode: boolean; reminder: { enabled: boolean; time: string } }) => void;
   grade: (wordId: string, result: 'mastered' | 'learning') => void;
   toggleFavorite: (wordId: string) => void;
   recordQuiz: (result: QuizResult) => void;
@@ -89,6 +90,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(() => {
     setState((prev) => ({ ...prev, user: null }));
   }, []);
+
+  const applyAccountPreferences = useCallback(
+    (prefs: { darkMode: boolean; reminder: { enabled: boolean; time: string } }) => {
+      setState((prev) => ({
+        ...prev,
+        darkMode: prefs.darkMode,
+        reminder: prefs.reminder,
+      }));
+    },
+    [],
+  );
 
   const grade = useCallback((wordId: string, result: 'mastered' | 'learning') => {
     setState((prev) => {
@@ -148,6 +160,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     () => ({
       signIn,
       signOut,
+      applyAccountPreferences,
       grade,
       toggleFavorite,
       recordQuiz,
@@ -160,6 +173,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [
       signIn,
       signOut,
+      applyAccountPreferences,
       grade,
       toggleFavorite,
       recordQuiz,

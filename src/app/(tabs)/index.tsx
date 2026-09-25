@@ -18,6 +18,7 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { levelProgress } from '@/lib/derived';
 import { useLevels } from '@/features/words/api';
 import { useProgressSummary } from '@/features/progress/api';
+import { useAuthUser } from '@/features/user/api';
 
 const greeting = () => {
   const hour = new Date().getHours();
@@ -32,6 +33,7 @@ export default function HomeScreen() {
   const theme = useThemeColors();
   const insets = useSafeAreaInsets();
   const { state } = useAppState();
+  const auth = useAuthUser();
   const offline = useIsOffline();
 
   const levels = useLevels();
@@ -68,7 +70,7 @@ export default function HomeScreen() {
         <View style={styles.header}>
           <Ionicons name="sunny-outline" size={24} color={theme.honey} />
           <AppText variant="title" bold style={styles.greeting} numberOfLines={1}>
-            {greeting()}, {state.user?.name.split(' ')[0] ?? 'there'}
+            {greeting()}, {auth.firstName}
           </AppText>
           <Pressable
             accessibilityLabel="Notifications"

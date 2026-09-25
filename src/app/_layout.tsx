@@ -4,12 +4,15 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Stack, usePathname, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { AppStateProvider, useAppState } from '@/lib/app-state';
+import { useAppAuth } from '@/lib/auth';
 import { useIsOffline } from '@/hooks/use-offline';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { backendConfig, env } from '@/lib/env';
+import { useEnsureUser } from '@/features/user/api';
 
 const queryClient = new QueryClient();
 
@@ -23,18 +26,20 @@ const queryClient = new QueryClient();
 function AppGate() {
   const router = useRouter();
   const pathname = usePathname();
-  const { state, actions } = useAppState();
+  const { isLoaded, isSignedIn } = useAppAuth();
   const offline = useIsOffline();
+  const { state, actions } = useAppState();
 
   useEffect(() => {
-    if (!state.user && pathname !== '/login') {
+    if (!isLoaded) return;
+    if (!isSignedIn && pathname !== '/login') {
       router.replace('/login');
       return;
     }
-    if (state.user && pathname === '/login') {
+    if (isSignedIn && pathname === '/login') {
       router.replace('/');
     }
-  }, [state.user, pathname, router]);
+  }, [isLoaded, isSignedIn, pathname, router]);
 
   useEffect(() => {
     if (offline && !state.offlineDismissed && pathname !== '/offline') {
@@ -53,8 +58,60 @@ function AppGate() {
   return null;
 }
 
+/**
+ * Creates the users row on first login and applies the persisted account
+ * preferences (dark mode, reminder) from that row to the live app state.
+ */
+function UserBootstrapper() {
+  const { isLoaded, isSignedIn } = useAppAuth();
+  const ensureUser = useEnsureUser();
+  const { actions } = useAppState();
+
+  useEffect(() => {
+    if (!isLoaded || !isSignedIn) return;
+    if (ensureUser.isIdle && backendConfig.clerk) {
+      ensureUser.mutate();
+    }
+  }, [isLoaded, isSignedIn, ensureUser]);
+
+  useEffect(() => {
+    if (ensureUser.isSuccess && ensureUser.data) {
+      actions.applyAccountPreferences({
+        darkMode: ensureUser.data.dark_mode,
+        reminder: {
+          enabled: ensureUser.data.reminder_enabled,
+          time: ensureUser.data.reminder_time,
+        },
+      });
+    }
+  }, [ensureUser.isSuccess, ensureUser.data, actions]);
+
+  return null;
+}
+
+function LoadingScreen() {
+  const theme = useThemeColors();
+  return (
+    <View
+      style={{
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: theme.background,
+      }}
+    >
+      <ActivityIndicator size="large" color={theme.primary} />
+    </View>
+  );
+}
+
 function RootNavigator() {
   const theme = useThemeColors();
+  const { isLoaded } = useAppAuth();
+
+  if (!isLoaded) {
+    return <LoadingScreen />;
+  }
 
   return (
     <>
@@ -72,6 +129,7 @@ function RootNavigator() {
         <Stack.Screen name="offline" />
       </Stack>
       <StatusBar style={theme.background === '#12191C' ? 'light' : 'dark'} />
+      <UserBootstrapper />
       <AppGate />
     </>
   );

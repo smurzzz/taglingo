@@ -11,6 +11,7 @@ import { AppText } from '@/components/ui/Text';
 import { Button } from '@/components/ui/Button';
 import { useAppState } from '@/lib/app-state';
 import { useAllWords } from '@/features/words/api';
+import { useAuthUser } from '@/features/user/api';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { Radius, Spacing } from '@/constants/theme';
 
@@ -19,6 +20,7 @@ const RING = 62;
 export default function QuizResultsScreen() {
   const colors = useThemeColors();
   const { state } = useAppState();
+  const auth = useAuthUser();
   const allWords = useAllWords();
   const quiz = state.lastQuiz;
 
@@ -38,7 +40,7 @@ export default function QuizResultsScreen() {
   const correct = quiz.correct.length;
   const total = quiz.correct.length + quiz.missed.length;
   const perfect = quiz.missed.length === 0;
-  const firstName = state.user?.name.split(' ')[0] ?? 'there';
+  const firstName = auth.firstName;
   const headline = perfect
     ? 'Perfect score'
     : correct / Math.max(1, total) >= 0.7
