@@ -25,13 +25,13 @@ Each phase has a goal, tasks, and an exit criterion — don't start the next pha
 ## Phase 1 — All UI Screens (static, no backend)
 **Goal:** every screen exists, is navigable, and looks correct — built against hardcoded/mock data, matching the 10 designed screens (+ offline state).
 
-- [ ] Shared components: `Card`, `WordCard` (flip), `LevelCard`, `StatusBadge`, `Button`, `BottomNav`, `SearchBar`
-- [ ] Mock fixtures: `/mocks/words.ts`, `/mocks/decks.ts`, `/mocks/progress.ts`
-- [ ] Screens: Welcome/Login, Home Dashboard, Browse by Level, Flashcard Study, Definition Lookup, Quiz Question, Quiz Results, Word Progress, Profile, Settings, Offline State
-- [ ] Every screen reachable from bottom nav / FAB / card taps
-- [ ] Empty and loading-skeleton states built for every list screen
+- [x] Shared components: `Card`, `WordCard` (flip), `LevelCard`, `StatusBadge`, `Button`, `BottomNav`, `SearchBar`
+- [x] Mock fixtures: `/mocks/words.ts`, `/mocks/decks.ts`, `/mocks/progress.ts`
+- [x] Screens: Welcome/Login, Home Dashboard, Browse by Level, Flashcard Study, Definition Lookup, Quiz Question, Quiz Results, Word Progress, Profile, Settings, Offline State
+- [x] Every screen reachable from bottom nav / FAB / card taps
+- [x] Empty and loading-skeleton states built for every list screen
 
-**Exit criterion:** a reviewer can tap through the entire app, every screen, using only mock data — no dead ends.
+**Exit criterion (met — 2026-09-25):** a reviewer can tap through the entire app, every screen, using only mock data — no dead ends. Verified: `expo lint`, `tsc --noEmit`, `expo-doctor` 21/21, Android export all clean.
 
 ---
 

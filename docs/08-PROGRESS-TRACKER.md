@@ -9,7 +9,7 @@ Living status doc. Update this after every work session — it should always ref
 | Phase | Exit Criterion (from `01-PHASE-PLAN.md`) | Status | Notes |
 |---|---|---|---|
 | 0 — Environment & Installation | Empty app runs, connects to Supabase, connects to Clerk | In progress | Scaffold, deps, env wiring done (commit `fbed274`); lint/typecheck/expo-doctor 21/21/Android export all clean. Blocked on: user creates Supabase + Clerk projects and pastes real keys into `.env`; then verify live connections via Expo Go. |
-| 1 — All UI Screens (static) | Reviewer can tap through every screen using only mock data | Not started | |
+| 1 — All UI Screens (static) | Reviewer can tap through every screen using only mock data | Done | All 11 screens + offline state built and navigable via mock data (18 words across 3 levels, seeded progress). Verified `expo lint`, `tsc --noEmit`, `expo-doctor` 21/21 clean. Mock-applicable critical-path tests pass (see below). |
 | 2 — Data Layer, Schema & Word Seeding | `words` table live and seeded from CSV, RLS verified | Not started | |
 | 3 — Auth & Roles | Real account logs in, lands on Home Dashboard, Profile reflects real data | Not started | |
 | 4 — Flashcard Study & Progress | Mastered word reflects instantly across Home/Browse/Progress | Not started | |
@@ -21,16 +21,16 @@ Living status doc. Update this after every work session — it should always ref
 
 | Test | Status |
 |---|---|
-| CP-01 | ☐ |
-| CP-02 | ☐ |
-| CP-03 | ☐ |
-| CP-04 | ☐ |
-| CP-05 | ☐ |
-| CP-06 | ☐ |
-| CP-07 | ☐ |
-| PS-01 | ☐ |
-| PS-02 | ☐ |
-| PS-03 | ☐ |
+| CP-01 | ☐ (requires backend RLS — Phase 2+) |
+| CP-02 | ☐ (requires backend RLS — Phase 2+) |
+| CP-03 | ✅ verified against mock quiz generator (distractors always same-level) |
+| CP-04 | ✅ verified against mock state + React Query invalidation on grade/favorite |
+| CP-05 | ✅ verified — `recordQuiz` writes `lastQuiz` only, never touches `status` |
+| CP-06 | ✅ verified — DefinitionSheet renders "No definition available" on `{found:false}` |
+| CP-07 | ✅ verified — root connectivity hook + full-screen Offline state + demo switch |
+| PS-01 | ☐ (requires `study_sessions` aggregation — Phase 4) |
+| PS-02 | ✅ verified — completion % computed directly from `state.status` |
+| PS-03 | ✅ verified — favorites tracked independently of status |
 
 ## Vocabulary Seeding Progress
 Track expansion from the CSV template (23 starter words) toward the 200–300 word target (`01-PHASE-PLAN.md` Phase 6).
@@ -51,4 +51,4 @@ Track expansion from the CSV template (23 starter words) toward the 200–300 wo
 
 ---
 
-**Last updated:** 2026-09-25 by Qoder (Phase 0 partial — commit `fbed274`)
+**Last updated:** 2026-09-25 (Phase 1 done — all static screens, mock fixtures, shared components, mock-applicable tests verified)
