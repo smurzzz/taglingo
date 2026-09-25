@@ -68,13 +68,22 @@ Backend activation checklist (user, once):
 ---
 
 ## Phase 4 — Flashcard Study & Progress (wire the real thing)
-- [ ] Browse by Level fetches real word counts and completion % per level from `word_progress`
-- [ ] Flashcard Study Mode fetches real words for the selected level
-- [ ] Mastered / Still Learning / Favorite writes to `word_progress`, synced in real time (Supabase)
-- [ ] Home Dashboard's streak and mastered-word count read real aggregated data
-- [ ] Word Progress screen (My Words) fetches real data, filterable by All/Mastered/Learning/Favorites
+- [x] Browse by Level fetches real word counts and completion % per level from `word_progress`
+- [x] Flashcard Study Mode fetches real words for the selected level
+- [x] Mastered / Still Learning / Favorite writes to `word_progress`, synced in real time (Supabase)
+- [x] Home Dashboard's streak and mastered-word count read real aggregated data
+- [x] Word Progress screen (My Words) fetches real data, filterable by All/Mastered/Learning/Favorites
 
-**Exit criterion:** a word marked Mastered on the Study screen is reflected immediately on Home Dashboard and Word Progress without a manual refresh.
+Schema: `20260927000000_progress_word_status.sql` (applied live 2026-09-27) adds a `'new'` status value to the `word_status` enum and makes it the `word_progress.status` default, so favorite-only rows stay clearly ungraded.
+
+Implementation (2026-09-27):
+- `src/features/words/api.ts` — `useLevels` (real vocabulary = per-level DB word counts), `useAllWords`, `useWordsByLevel` read the live `words` table through the Clerk-bound Supabase client; `mapWord` maps DB rows to the screen `Word` shape (part of speech / definition / example empty until Phase 5). Mock fixtures remain the fallback whenever Supabase or a Clerk session is unavailable.
+- `src/features/progress/api.ts` — a single cached snapshot + summary/level/counts/touched views query the live `word_progress` (status/favorites/updated_at) and `study_sessions` (streak). Mutations `useGradeWord`, `useToggleFavorite`, `useRecordStudySession` write real rows (upserts on `user_id + word_id` / `user_id + studied_on`; favorite lifecycle keeps graded rows and deletes new-only rows) and invalidate the `progress`/`words` query keys so Home, Browse and My Words refresh without a manual pull.
+- Screens rewired off the mock store: Study, Home Dashboard, Browse by Level, Level words, Progress and Profile (weekly history relabelled "words", not minutes).
+- Every real-mode query keeps the seeded-mock behaviour as the no-keys/demo fallback.
+- Verified: `tsc --noEmit`, `expo lint`, `expo-doctor` 21/21, and DB-level tests under simulated Clerk JWT claims (grade upsert, favorite-only insert, favorite-toggle lifecycle, study-session dedupe, cross-user isolation, cascade cleanup) — see CP-11/CP-12 in `05-TESTING-REPORT.md`.
+
+**Exit criterion:** a word marked Mastered on the Study screen is reflected immediately on Home Dashboard and Word Progress without a manual refresh. **Status: code + DB done, RLS-verified live; final device E2E pending** (same device sign-in as Phase 3 — with no real `users`/`word_progress` rows yet, real-mode screens show empty starting progress until the first device login).
 
 ---
 

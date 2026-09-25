@@ -92,7 +92,7 @@ export default function ProfileScreen() {
               This week&apos;s study history
             </AppText>
             <AppText variant="caption" muted>
-              {weekTotal} mins
+              {weekTotal} words
             </AppText>
           </View>
           {summary.data ? <WeekChart minutes={summary.data.weeklyMinutes} showMinutes={false} /> : null}

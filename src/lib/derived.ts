@@ -16,22 +16,26 @@ export interface LevelProgress {
   percent: number;
 }
 
-export const levelProgress = (
+/** Progress across an explicit deck — real or mock words. */
+export const deckProgress = (
+  deck: Word[],
   status: Record<string, WordStatus>,
-  levelId: LevelId,
 ): LevelProgress => {
-  const deck = wordsInLevel(levelId);
   const mastered = deck.filter((word) => status[word.id] === 'mastered').length;
   const learning = deck.filter((word) => status[word.id] === 'learning').length;
-  const total = deck.length || 1;
   return {
     mastered,
     learning,
     fresh: deck.length - mastered - learning,
     total: deck.length,
-    percent: Math.round((mastered / total) * 100),
+    percent: deck.length ? Math.round((mastered / deck.length) * 100) : 0,
   };
 };
+
+export const levelProgress = (
+  status: Record<string, WordStatus>,
+  levelId: LevelId,
+): LevelProgress => deckProgress(wordsInLevel(levelId), status);
 
 export const totalProgress = (status: Record<string, WordStatus>) =>
   levels.map((level) => ({

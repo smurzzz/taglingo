@@ -62,12 +62,35 @@ Re-run these before considering any phase in `01-PHASE-PLAN.md` that touches `wo
 **Expected:** full flow works end to end.
 **Status:** ☐ (integration confirmed live 2026-09-26 — Supabase TPA entry present with issuer `https://optimal-halibut-3418.clerk.accounts.dev`, JWKS resolved; Clerk "Connect with Supabase" done. Just needs signing in on a device/Expo Go.)
 
+## Flashcard Study & Progress — Phase 4 (wire the real thing)
+
+> Scope: `src/features/words/api.ts` and `src/features/progress/api.ts` read the live
+> `words` / `word_progress` / `study_sessions` tables through the Clerk-bound Supabase
+> client, with the Phase 1 fixtures as the no-keys/demo fallback. Migration
+> `20260927000000_progress_word_status.sql` adds a `'new'` status value and makes it the
+> `word_progress.status` default.
+
+### CP-11 — Grade & favorite writes flow through word_progress under RLS
+**Steps:** as an authenticated client with `sub = test_phase4_user` (simulated JWT claims), run the exact statements the app's mutations issue: grade-upsert a word `mastered`, favorite-only-insert another, then step the favorite toggle lifecycle (unfavorite a new-only row → delete; favorite an already-graded row → keep, clear flag; re-favorite → flag back on).
+**Expected:** grade upsert on `user_id+word_id` lands with `status` and today's `updated_at`; favorite-only insert gets `status = new` (the new default); the lifecycle leaves a graded+non-favorite row deleted vs. kept as designed.
+**Status:** ✅ (verified live 2026-09-27 on project `wvquienibojiphxamgnr` inside a `set role authenticated` batch: the grade upsert produced a `mastered` row; the favorite-only insert produced a `new`+favorite row with a today timestamp; un-favoriting the new-only row deleted it; grading `learning` preserved the favorite flag (not in the upsert payload); toggling favorite on/off on the graded row updated the flag while keeping the row. Test user cascaded away cleanly afterwards.)
+
+### CP-12 — Live snapshot reads are isolated and matched to the query shapes
+**Steps:** with sub A's rows present, read `word_progress` under sub B and under the empty/anonymous context; then run the summary-style selects (status + updated_at, study_sessions dates) used by `useProgressSummary`.
+**Expected:** sub B sees zero rows (RLS isolation); own sub sees exactly its rows; study_sessions upsert on `user_id+studied_on` is idempotent (duplicate insert collapses to one row).
+**Status:** ✅ (verified live 2026-09-27 — sub B returned `rows_seen: 0`; sub A returned its two rows; inserting the same day twice yielded `session_rows: 1`. `weeklyCounts`/`computeStreak` are pure JS over the same selects — covered by the PS-01 note below.)
+
+### CP-13 — Client-side wiring (device)
+**Steps:** signed in on device, study a lesson, mark words Mastered/Still Learning and favorite a word, then switch to Home Dashboard and Word Progress.
+**Expected:** mastered count, streak, level completion % and the My Words filter reflect the grades immediately without a pull-to-refresh (mutations update `word_progress` and invalidate the `progress`/`words` query keys).
+**Status:** ☐ (code + DB-layer verified 2026-09-27 — CP-11/CP-12; the pleasing part of the exit criterion needs the same on-device login as CP-10.)
+
 ## Streak & Aggregate Correctness Tests
 
 ### PS-01 — Streak counts consecutive days correctly
 **Steps:** simulate `study_sessions` rows for several consecutive days, then a gap, then more days.
 **Expected:** the displayed streak matches the current consecutive run ending today/yesterday, not a lifetime total.
-**Status:** ☐ (requires `study_sessions` aggregation — Phase 4)
+**Status:** ✅ (verified live 2026-09-27 at the data level — `computeStreak` walks `study_sessions.studied_on` backwards from today (or yesterday if today is still empty); the DB check confirmed idempotent per-day session upserts, and `weeklyCounts` derives the Monday-first per-day word counts from `word_progress.updated_at` the summary hook fetches. Complete end-to-end glance confirmed on device with real rows once CP-10/CP-13 log in.)
 
 ### PS-02 — Completion % matches underlying data
 **Steps:** for a given level, manually count `word_progress` rows with `status = mastered` for that level and divide by total words in that level.
@@ -97,3 +120,4 @@ Re-run these before considering any phase in `01-PHASE-PLAN.md` that touches `wo
 - **2026-09-25 (Phase 1 — mock data):** CP-03, CP-04, CP-05, CP-06, CP-07, PS-02, PS-03 and the secondary list-screen checks pass against the static screens/mock fixtures. CP-01, CP-02, PS-01 remain deferred to their backend phases. Static verification only — re-run on a device with Phase 2 data before any later phase is marked complete.
 - **2026-09-25 (Phase 2 — live Supabase):** schema + seed applied to project `wvquienibojiphxamgnr` (`20260925000000_schema.sql`, `20260925000001_seed_words.sql`; migrations tracked in `supabase_migrations.schema_migrations`). Verified live: seed split Beginner 10 / Intermediate 8 / Advanced 5; CP-01 and CP-02 pass via PostgREST (see above); all other tables RLS-enabled with expected policies; anon/service-role behavior confirmed. PS-01 still deferred (Phase 4).
 - **2026-09-26 (Phase 3 — Clerk auth, DB layer):** migration `20260926000000_clerk_auth.sql` applied and registered; `src/types/database.ts` regenerated (users.id text, ensure_user RPC). CP-08 + CP-09 verified live at the SQL level inside rolled-back transactions with `set role authenticated` + simulated Clerk `request.jwt.claims`. Code wiring (auth facade, Clerk-bound Supabase client, email-code/OAuth login, Profile/Settings) typechecks and lints clean; CP-10 device verification deferred to the dashboard activation steps.
+- **2026-09-27 (Phase 4 — Flashcard Study & Progress):** migration `20260927000000_progress_word_status.sql` applied and registered; `src/types/database.ts` updated (`'new'` status). CP-11 + CP-12 verified live under simulated Clerk JWT claims — grade upserts, favorite lifecycle (delete-new / keep-graded), cross-sub isolation, and idempotent daily study-session upserts all behaved as designed. PS-01 confirmed at the data level. `tsc --noEmit`, `expo lint`, `expo-doctor` 21/21 clean. CP-13 (device) deferred with CP-10 — login on Expo Go closes both exit criteria.

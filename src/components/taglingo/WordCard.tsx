@@ -126,9 +126,11 @@ export function WordCard({
           <AppText variant="display" bold center style={styles.english}>
             {word.english}
           </AppText>
-          <AppText variant="overline" muted>
-            {word.partOfSpeech}
-          </AppText>
+          {word.partOfSpeech ? (
+            <AppText variant="overline" muted>
+              {word.partOfSpeech}
+            </AppText>
+          ) : null}
 
           <Pressable
             accessibilityRole="button"

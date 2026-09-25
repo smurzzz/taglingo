@@ -14,13 +14,13 @@ import { StatTile } from '@/components/taglingo/StatTile';
 import { WeekChart } from '@/components/taglingo/WeekChart';
 import { WordRow } from '@/components/taglingo/WordRow';
 import { Radius, Spacing } from '@/constants/theme';
-import { useAppState } from '@/lib/app-state';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { levelProgress } from '@/lib/derived';
 import { levels } from '@/mocks/decks';
 import type { LevelId } from '@/mocks/words';
 import {
   useLevelProgress,
+  useProgressSnapshot,
   useProgressSummary,
   useStatusCounts,
   useTouchedWords,
@@ -42,12 +42,15 @@ const filters: { id: WordFilter; label: string }[] = [
 export default function ProgressScreen() {
   const router = useRouter();
   const theme = useThemeColors();
-  const { state } = useAppState();
   const [filter, setFilter] = useState<WordFilter>('all');
 
   const summary = useProgressSummary();
   const counts = useStatusCounts();
   const myWords = useTouchedWords(filter);
+  const snapshot = useProgressSnapshot();
+
+  const isFavorite = (wordId: string) => snapshot.data?.favorites.includes(wordId) ?? false;
+  const statusOf = (wordId: string) => snapshot.data?.status[wordId] ?? 'new';
 
   const weekTotal = summary.data?.weeklyMinutes.reduce((sum, value) => sum + value, 0) ?? 0;
   const goalPercent = Math.min(
@@ -66,7 +69,7 @@ export default function ProgressScreen() {
           <ErrorState onRetry={() => summary.refetch()} />
         ) : (
           <View style={styles.tiles}>
-            <StatTile icon="time-outline" tone="ink" value={weekTotal} label="minutes this week" />
+            <StatTile icon="time-outline" tone="ink" value={weekTotal} label="words this week" />
             <StatTile icon="flame" tone="flame" value={summary.data.streak} label="day streak" />
           </View>
         )}
@@ -77,7 +80,7 @@ export default function ProgressScreen() {
               This week&apos;s study history
             </AppText>
             <AppText variant="caption" muted>
-              (mins)
+              (words)
             </AppText>
           </View>
           {summary.data ? <WeekChart minutes={summary.data.weeklyMinutes} /> : <SkeletonList rows={1} />}
@@ -124,7 +127,7 @@ export default function ProgressScreen() {
           <Ionicons name="book-outline" size={16} color={theme.mutedForeground} />
           <AppText variant="label" muted>
             <AppText variant="label" bold style={{ color: theme.foreground }}>
-              {state.masteredCount}
+              {summary.data?.masteredCount ?? 0}
             </AppText>{' '}
             words mastered in total
           </AppText>
@@ -187,8 +190,8 @@ export default function ProgressScreen() {
               <WordRow
                 key={word.id}
                 word={word}
-                status={state.status[word.id] ?? 'new'}
-                favorite={state.favorites.includes(word.id)}
+                status={statusOf(word.id)}
+                favorite={isFavorite(word.id)}
                 onPress={() =>
                   router.push({
                     pathname: '/study',
@@ -208,9 +211,9 @@ export default function ProgressScreen() {
 function LevelCompletionRow({ levelId, name }: { levelId: LevelId; name: string }) {
   const router = useRouter();
   const theme = useThemeColors();
-  const { state } = useAppState();
+  const snapshot = useProgressSnapshot();
   const progress = useLevelProgress(levelId);
-  const data = progress.data ?? levelProgress(state.status, levelId);
+  const data = progress.data ?? levelProgress(snapshot.data?.status ?? {}, levelId);
 
   return (
     <Pressable

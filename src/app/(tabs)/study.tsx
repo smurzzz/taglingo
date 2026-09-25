@@ -1,4 +1,3 @@
-import { useQueryClient } from '@tanstack/react-query';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -15,10 +14,15 @@ import { SproutMark } from '@/components/taglingo/LogoMark';
 import { OfflineBanner } from '@/components/taglingo/OfflineBanner';
 import { WordCard } from '@/components/taglingo/WordCard';
 import { Radius, Spacing } from '@/constants/theme';
-import { useAppState } from '@/lib/app-state';
 import { useIsOffline } from '@/hooks/use-offline';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { levelProgress, studyOrder } from '@/lib/derived';
+import {
+  useGradeWord,
+  useProgressSnapshot,
+  useRecordStudySession,
+  useToggleFavorite,
+} from '@/features/progress/api';
 import { useWordsByLevel } from '@/features/words/api';
 import { levels, getLevel } from '@/mocks/decks';
 import type { LevelId } from '@/mocks/words';
@@ -32,16 +36,23 @@ export default function StudyScreen() {
   const router = useRouter();
   const theme = useThemeColors();
   const insets = useSafeAreaInsets();
-  const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ level?: string; start?: string }>();
   const level = getLevel(params.level);
-  const { state, actions } = useAppState();
   const offline = useIsOffline();
+
+  const snapshot = useProgressSnapshot();
+  const gradeWord = useGradeWord();
+  const toggleFavorite = useToggleFavorite();
+  const recordSession = useRecordStudySession();
+  const sessionRecorded = useRef(false);
+
+  const snapshotStatus = snapshot.data?.status;
+  const favorites = snapshot.data?.favorites ?? [];
 
   const words = useWordsByLevel(level.id);
   const deck = useMemo(
-    () => studyOrder(words.data ?? [], state.status),
-    [words.data, state.status],
+    () => studyOrder(words.data ?? [], snapshotStatus ?? {}),
+    [words.data, snapshotStatus],
   );
 
   const [index, setIndex] = useState(0);
@@ -62,6 +73,13 @@ export default function StudyScreen() {
     setFinished(false);
   }, [level.id]);
 
+  // one study_sessions row per calendar day, on first mount of the screen
+  useEffect(() => {
+    if (sessionRecorded.current) return;
+    sessionRecorded.current = true;
+    recordSession.mutate();
+  }, [recordSession]);
+
   // apply the deep-linked start word once the deck has loaded (and whenever
   // the target word changes) — mock data arrives asynchronously
   useEffect(() => {
@@ -74,18 +92,12 @@ export default function StudyScreen() {
   }, [deck, params.start]);
 
   const word = deck[index];
-  const favorite = word ? state.favorites.includes(word.id) : false;
-  const progress = levelProgress(state.status, level.id);
-
-  const syncProgress = () => {
-    void queryClient.invalidateQueries({ queryKey: ['words'] });
-    void queryClient.invalidateQueries({ queryKey: ['progress'] });
-  };
+  const favorite = word ? favorites.includes(word.id) : false;
+  const progress = levelProgress(snapshotStatus ?? {}, level.id);
 
   const advance = (result: 'mastered' | 'learning') => {
     if (!word) return;
-    actions.grade(word.id, result);
-    syncProgress();
+    gradeWord.mutate({ wordId: word.id, result });
     setFlipped(false);
     if (index + 1 >= deck.length) {
       setFinished(true);
@@ -202,10 +214,7 @@ export default function StudyScreen() {
               flipped={flipped}
               favorite={favorite}
               onFlip={() => setFlipped((value) => !value)}
-              onToggleFavorite={() => {
-                actions.toggleFavorite(word.id);
-                syncProgress();
-              }}
+              onToggleFavorite={() => toggleFavorite.mutate(word.id)}
               onOpenDefinition={() => setSheetOpen(true)}
             />
 
@@ -247,8 +256,7 @@ export default function StudyScreen() {
         visible={sheetOpen}
         onToggleFavorite={() => {
           if (!word) return;
-          actions.toggleFavorite(word.id);
-          syncProgress();
+          toggleFavorite.mutate(word.id);
         }}
         onClose={() => setSheetOpen(false)}
       />

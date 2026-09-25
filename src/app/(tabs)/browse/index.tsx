@@ -12,11 +12,11 @@ import { ScreenHeader } from '@/components/taglingo/ScreenHeader';
 import { OfflineBanner } from '@/components/taglingo/OfflineBanner';
 import { WordRow } from '@/components/taglingo/WordRow';
 import { Spacing } from '@/constants/theme';
-import { useAppState } from '@/lib/app-state';
 import { useIsOffline } from '@/hooks/use-offline';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { levelProgress } from '@/lib/derived';
 import { useAllWords, useLevels } from '@/features/words/api';
+import { useProgressSnapshot } from '@/features/progress/api';
 import type { LevelId } from '@/mocks/words';
 
 /**
@@ -27,12 +27,15 @@ import type { LevelId } from '@/mocks/words';
 export default function BrowseScreen() {
   const router = useRouter();
   const theme = useThemeColors();
-  const { state } = useAppState();
   const offline = useIsOffline();
   const [query, setQuery] = useState('');
 
   const levels = useLevels();
   const allWords = useAllWords();
+  const snapshot = useProgressSnapshot();
+
+  const status = snapshot.data?.status ?? {};
+  const favorites = snapshot.data?.favorites ?? [];
 
   const trimmed = query.trim().toLowerCase();
   const searching = trimmed.length > 0;
@@ -79,8 +82,8 @@ export default function BrowseScreen() {
                   <WordRow
                     key={word.id}
                     word={word}
-                    status={state.status[word.id] ?? 'new'}
-                    favorite={state.favorites.includes(word.id)}
+                    status={status[word.id] ?? 'new'}
+                    favorite={favorites.includes(word.id)}
                     onPress={() =>
                       router.push({
                         pathname: '/study',
@@ -108,7 +111,7 @@ export default function BrowseScreen() {
                   <LevelCard
                     key={level.id}
                     level={level}
-                    progress={levelProgress(state.status, level.id as LevelId)}
+                    progress={levelProgress(status, level.id as LevelId)}
                     onPress={() =>
                       router.push({
                         pathname: '/browse/[level]',

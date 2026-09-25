@@ -54,11 +54,13 @@ One row per (user, word) pair — created the first time a user interacts with a
 | `id` | uuid, PK | |
 | `user_id` | uuid, FK → `users.id` | |
 | `word_id` | uuid, FK → `words.id` | |
-| `status` | enum(`learning`,`mastered`) | default `learning` |
+| `status` | enum(`learning`,`mastered`,`new`) | default `new` (added Phase 4) |
 | `is_favorite` | boolean | default `false` |
 | `updated_at` | timestamptz | trigger-maintained |
 
 Unique constraint on `(user_id, word_id)` — upsert on every flashcard interaction.
+
+A favorite is tracked on the same row, so a word that has only been favorited (no grade yet) keeps `status = 'new'`. Phase 4's favorite toggle deletes the row again when un-favoriting a `new`-only row (it was pure metadata), and instead clears its flag on rows that carry a real grade.
 
 ### 3.4 `study_sessions`
 Used to compute the daily streak shown on Home Dashboard and Profile.

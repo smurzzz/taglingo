@@ -17,7 +17,7 @@ import { useIsOffline } from '@/hooks/use-offline';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { levelProgress } from '@/lib/derived';
 import { useLevels } from '@/features/words/api';
-import { useProgressSummary } from '@/features/progress/api';
+import { useProgressSnapshot, useProgressSummary } from '@/features/progress/api';
 import { useAuthUser } from '@/features/user/api';
 
 const greeting = () => {
@@ -37,15 +37,17 @@ export default function HomeScreen() {
   const offline = useIsOffline();
 
   const levels = useLevels();
+  const snapshot = useProgressSnapshot();
   const summary = useProgressSummary();
 
   const refreshing = levels.isRefetching || summary.isRefetching;
 
+  const status = snapshot.data?.status ?? {};
   const currentLevel =
-    levels.data?.find((level) => levelProgress(state.status, level.id).percent < 100) ??
+    levels.data?.find((level) => levelProgress(status, level.id).percent < 100) ??
     levels.data?.[0];
   const currentProgress = currentLevel
-    ? levelProgress(state.status, currentLevel.id)
+    ? levelProgress(status, currentLevel.id)
     : null;
 
   return (

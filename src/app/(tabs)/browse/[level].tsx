@@ -11,10 +11,9 @@ import { SkeletonList } from '@/components/ui/Skeleton';
 import { ScreenHeader } from '@/components/taglingo/ScreenHeader';
 import { WordRow } from '@/components/taglingo/WordRow';
 import { Radius, Spacing } from '@/constants/theme';
-import { useAppState } from '@/lib/app-state';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { filterWords, useWordsByLevel, type WordFilter } from '@/features/words/api';
-import { useLevelProgress } from '@/features/progress/api';
+import { useLevelProgress, useProgressSnapshot } from '@/features/progress/api';
 import { getLevel } from '@/mocks/decks';
 
 const filters: { id: WordFilter; label: string }[] = [
@@ -33,17 +32,20 @@ export default function LevelWordsScreen() {
   const theme = useThemeColors();
   const params = useLocalSearchParams<{ level?: string }>();
   const level = getLevel(params.level);
-  const { state } = useAppState();
   const [filter, setFilter] = useState<WordFilter>('all');
 
   const words = useWordsByLevel(level.id);
   const progress = useLevelProgress(level.id);
+  const snapshot = useProgressSnapshot();
+
+  const status = snapshot.data?.status ?? {};
+  const favorites = snapshot.data?.favorites ?? [];
 
   const rows = filterWords(
     words.data ?? [],
     filter,
-    state.status,
-    state.favorites,
+    status,
+    favorites,
   );
 
   return (
@@ -172,8 +174,8 @@ export default function LevelWordsScreen() {
               <WordRow
                 key={word.id}
                 word={word}
-                status={state.status[word.id] ?? 'new'}
-                favorite={state.favorites.includes(word.id)}
+                status={status[word.id] ?? 'new'}
+                favorite={favorites.includes(word.id)}
                 onPress={() =>
                   router.push({
                     pathname: '/study',
