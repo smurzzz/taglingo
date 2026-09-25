@@ -10,7 +10,7 @@ Living status doc. Update this after every work session — it should always ref
 |---|---|---|---|
 | 0 — Environment & Installation | Empty app runs, connects to Supabase, connects to Clerk | In progress | Scaffold, deps, env wiring done (commit `fbed274`); lint/typecheck/expo-doctor 21/21/Android export all clean. Blocked on: user creates Supabase + Clerk projects and pastes real keys into `.env`; then verify live connections via Expo Go. |
 | 1 — All UI Screens (static) | Reviewer can tap through every screen using only mock data | Done | All 11 screens + offline state built and navigable via mock data (18 words across 3 levels, seeded progress). Verified `expo lint`, `tsc --noEmit`, `expo-doctor` 21/21 clean. Mock-applicable critical-path tests pass (see below). |
-| 2 — Data Layer, Schema & Word Seeding | `words` table live and seeded from CSV, RLS verified | Not started | |
+| 2 — Data Layer, Schema & Word Seeding | `words` table live and seeded from CSV, RLS verified | Done | Migrations authored (`supabase/migrations/20260925000000_schema.sql` + `20260925000001_seed_words.sql`), applied to live project `wvquienibojiphxamgnr` via the Supabase Management API, and recorded in `supabase_migrations.schema_migrations` so `npx supabase db push` won't re-apply. Verified live: seed split Beginner 10 / Intermediate 8 / Advanced 5; all 5 tables RLS-enabled; CP-01 + CP-02 pass end-to-end via PostgREST (throwaway auth user, cleaned up); anon is fail-closed. `src/types/database.ts` regenerated to match. Lint/typecheck/expo-doctor clean. |
 | 3 — Auth & Roles | Real account logs in, lands on Home Dashboard, Profile reflects real data | Not started | |
 | 4 — Flashcard Study & Progress | Mastered word reflects instantly across Home/Browse/Progress | Not started | |
 | 5 — Definition Lookup & Quiz Mode | Full quiz runs end to end, missed word reviewable from results | Not started | |
@@ -21,8 +21,8 @@ Living status doc. Update this after every work session — it should always ref
 
 | Test | Status |
 |---|---|
-| CP-01 | ☐ (requires backend RLS — Phase 2+) |
-| CP-02 | ☐ (requires backend RLS — Phase 2+) |
+| CP-01 | ✅ verified live on Supabase (postgREST, auth user) — cross-user `word_progress` write → 403, read → own rows only |
+| CP-02 | ✅ verified live on Supabase — authenticated `POST /words` → 403; anonymous → 401 |
 | CP-03 | ✅ verified against mock quiz generator (distractors always same-level) |
 | CP-04 | ✅ verified against mock state + React Query invalidation on grade/favorite |
 | CP-05 | ✅ verified — `recordQuiz` writes `lastQuiz` only, never touches `status` |
@@ -42,7 +42,7 @@ Track expansion from the CSV template (23 starter words) toward the 200–300 wo
 | Advanced | 5 | ~60-100 |
 
 ## Known Blockers
-- **Phase 0 → real backend connections.** Need a Supabase project (URL + anon key) and a Clerk project (publishable key), entered into `.env`. App compiles and runs with placeholders and shows setup cards until then. Owner: user.
+- **No local Supabase verification path** — Docker is not installed on this machine, so `supabase start`/`db lint`/locally-restarting PostgREST can't run. Phase 2 migrations were applied and verified live via the Supabase Management API instead. DB-level `npx supabase link` + `supabase db push` can't run without the Postgres password; prefer the Management API (`POST /v1/projects/<ref>/database/query`) for any future DDL.
 
 ## Open Decisions
 - [ ] Daily goal word count on Home Dashboard — hardcoded at 20 for v1; revisit if it should be user-configurable.
@@ -51,4 +51,4 @@ Track expansion from the CSV template (23 starter words) toward the 200–300 wo
 
 ---
 
-**Last updated:** 2026-09-25 (Phase 1 done — all static screens, mock fixtures, shared components, mock-applicable tests verified)
+**Last updated:** 2026-09-25 (Phase 2 complete — schema + seed applied to live project `wvquienibojiphxamgnr` via Management API, migrations tracked, seed split + RLS verified end-to-end)

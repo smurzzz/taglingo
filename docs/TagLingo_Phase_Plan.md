@@ -38,12 +38,12 @@ Each phase has a goal, tasks, and an exit criterion — don't start the next pha
 ## Phase 2 — Data Layer, Schema & Word Seeding
 **Goal:** the database is live in Supabase and populated with real starting vocabulary before any screen is wired to it.
 
-- [ ] Create tables: `users`, `words` (tagalog, cebuano, english, level, example_sentence, audio_url), `word_progress` (user_id, word_id, status: mastered/learning/favorite), `quiz_attempts`
-- [ ] Set up RLS: a user can only read/write their own `word_progress` and `quiz_attempts`; `words` is publicly readable, writable only via direct DB/service-role import (no in-app admin panel, per project scope)
-- [ ] **Seed the `words` table using `taglingo_words_template.csv`** — import via Supabase Table Editor → Insert → Import data from CSV, or a one-off `supabase db` script. This is the starting Beginner/Intermediate/Advanced dataset; expand it toward the 200–300 word target before Phase 6.
-- [ ] Verify seeded rows split correctly across levels (`SELECT level, count(*) FROM words GROUP BY level`)
+- [x] Create tables: `users`, `words` (tagalog, cebuano, english, level, example_sentence, audio_url), `word_progress` (user_id, word_id, status: mastered/learning/favorite), `quiz_attempts` — authored in `supabase/migrations/20260925000000_schema.sql` (renamed to CLI timestamp format; includes `study_sessions` per `02-ARCHITECTURE.md` §3.4). **Applied** to the live project `wvquienibojiphxamgnr` (taglingo) via the Supabase Management API on 2026-09-25; migration recorded in `supabase_migrations.schema_migrations` so `npx supabase db push` won't re-apply.
+- [x] Set up RLS: a user can only read/write their own `word_progress` and `quiz_attempts`; `words` is read-only for authenticated clients (SELECT policy only, no write grants), writable only via direct DB/service-role import (no in-app admin panel, per project scope) — policies in `20260925000000_schema.sql`. Verified live end-to-end with a throwaway auth user (see `05-TESTING-REPORT.md` CP-01/CP-02).
+- [x] **Seed the `words` table using `taglingo_words_template.csv`** — authored `supabase/migrations/20260925000001_seed_words.sql` (23 rows: Beginner 10 / Intermediate 8 / Advanced 5), generated programmatically from the CSV via `scripts/generate-words-seed.mjs` so it can't drift. **Applied** to the live project; confirmed 23 rows with the expected level split.
+- [x] Verify seeded rows split correctly across levels (`SELECT level, count(*) FROM words GROUP BY level`) — **done 2026-09-25** on the live project: Beginner 10 / Intermediate 8 / Advanced 5.
 
-**Exit criterion:** `words` table is live and seeded from the CSV, levels query returns the expected Beginner/Intermediate/Advanced counts, and RLS blocks a client from writing to another user's `word_progress`.
+**Exit criterion:** `words` table is live and seeded from the CSV, levels query returns the expected Beginner/Intermediate/Advanced counts, and RLS blocks a client from writing to another user's `word_progress`. **Status: MET** (verified live 2026-09-25 — see CP-01/CP-02 in `05-TESTING-REPORT.md`).
 
 ---
 

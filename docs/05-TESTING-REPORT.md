@@ -9,12 +9,12 @@ Re-run these before considering any phase in `01-PHASE-PLAN.md` that touches `wo
 ### CP-01 — `word_progress` is scoped per user
 **Steps:** authenticated as User A, attempt to read or write a `word_progress` row belonging to User B.
 **Expected:** rejected by RLS in both directions.
-**Status:** ☐ (requires live Supabase + RLS — Phase 2+)
+**Status:** ✅ (verified live 2026-09-25 on Supabase project `wvquienibojiphxamgnr` with a throwaway auth user via PostgREST: User A → `POST /rest/v1/word_progress` for User B's `user_id` returned HTTP 403 `42501 new row violates row-level security policy`; reading `/rest/v1/word_progress` returned only User A's own rows; anonymous requests returned 401. Test users cleaned up afterwards.)
 
 ### CP-02 — `words` is read-only for every client role
 **Steps:** attempt an `INSERT`/`UPDATE`/`DELETE` on `words` from an authenticated client session.
 **Expected:** rejected by RLS — the only way vocabulary changes is a direct DB/service-role import (`01-PHASE-PLAN.md` Phase 2).
-**Status:** ☐ (requires live Supabase + RLS — Phase 2+)
+**Status:** ✅ (verified live 2026-09-25: authenticated client `POST /rest/v1/words` returned HTTP 403 `42501` (no INSERT grant); anonymous `GET /rest/v1/words` returned 401 (fail-closed). The `words: read for authenticated` SELECT policy is the only policy on the table — see `20260925000000_schema.sql`.)
 
 ### CP-03 — Quiz distractors never cross levels
 **Steps:** generate several quizzes at each level; inspect the 3 distractors per question.
@@ -74,3 +74,4 @@ Re-run these before considering any phase in `01-PHASE-PLAN.md` that touches `wo
 
 ## Run Log
 - **2026-09-25 (Phase 1 — mock data):** CP-03, CP-04, CP-05, CP-06, CP-07, PS-02, PS-03 and the secondary list-screen checks pass against the static screens/mock fixtures. CP-01, CP-02, PS-01 remain deferred to their backend phases. Static verification only — re-run on a device with Phase 2 data before any later phase is marked complete.
+- **2026-09-25 (Phase 2 — live Supabase):** schema + seed applied to project `wvquienibojiphxamgnr` (`20260925000000_schema.sql`, `20260925000001_seed_words.sql`; migrations tracked in `supabase_migrations.schema_migrations`). Verified live: seed split Beginner 10 / Intermediate 8 / Advanced 5; CP-01 and CP-02 pass via PostgREST (see above); all other tables RLS-enabled with expected policies; anon/service-role behavior confirmed. PS-01 still deferred (Phase 4).
