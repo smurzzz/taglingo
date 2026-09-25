@@ -15,6 +15,14 @@ Exact versions (no `^`/`~`) for `expo`, `@clerk/clerk-expo`, and `@supabase/supa
 | `@tanstack/react-query` | Server state, caching, invalidation | Caret |
 | `react-hook-form` | Form state (Report/Settings forms) | Caret |
 | `zod` | Schema validation, paired with `react-hook-form` | Caret |
+| `@hookform/resolvers` | Bridges `zod` schemas into `react-hook-form` | Caret |
+
+### Clerk peer dependencies (required by `@clerk/clerk-expo`, verified via `expo-doctor`)
+| Package | Purpose |
+|---|---|
+| `expo-secure-store` | Token storage for Clerk sessions |
+| `expo-web-browser` | OAuth/sign-in browser flows |
+| `expo-auth-session` | Auth session handling (OAuth) |
 
 ## 3. Backend (Next.js API Routes)
 Not an npm dependency of the mobile app itself, but part of the stack per `00-PROJECT-OVERVIEW.md` §6:
@@ -28,14 +36,17 @@ Not an npm dependency of the mobile app itself, but part of the stack per `00-PR
 | Package | Purpose |
 |---|---|
 | `eslint` | Linting |
+| `eslint-config-expo` | Expo's ESLint flat config (`eslint.config.js`) |
 | `prettier` | Formatting |
 | `typescript` | Type checking, `strict: true` |
 
 ## 5. Install Commands
 ```
 npx expo install expo-router expo-notifications
-npm install @clerk/clerk-expo @supabase/supabase-js @tanstack/react-query react-hook-form zod
-npm install -D eslint prettier typescript
+npx expo install expo-secure-store expo-web-browser expo-auth-session  # @clerk/clerk-expo peers
+npm install --save-exact @clerk/clerk-expo @supabase/supabase-js
+npm install @tanstack/react-query react-hook-form zod @hookform/resolvers
+npm install -D eslint eslint-config-expo prettier typescript
 ```
 
 ## 6. External Services (not npm packages)

@@ -8,7 +8,7 @@ Living status doc. Update this after every work session — it should always ref
 
 | Phase | Exit Criterion (from `01-PHASE-PLAN.md`) | Status | Notes |
 |---|---|---|---|
-| 0 — Environment & Installation | Empty app runs, connects to Supabase, connects to Clerk | Not started | |
+| 0 — Environment & Installation | Empty app runs, connects to Supabase, connects to Clerk | In progress | Scaffold, deps, env wiring done (commit `fbed274`); lint/typecheck/expo-doctor 21/21/Android export all clean. Blocked on: user creates Supabase + Clerk projects and pastes real keys into `.env`; then verify live connections via Expo Go. |
 | 1 — All UI Screens (static) | Reviewer can tap through every screen using only mock data | Not started | |
 | 2 — Data Layer, Schema & Word Seeding | `words` table live and seeded from CSV, RLS verified | Not started | |
 | 3 — Auth & Roles | Real account logs in, lands on Home Dashboard, Profile reflects real data | Not started | |
@@ -42,7 +42,7 @@ Track expansion from the CSV template (23 starter words) toward the 200–300 wo
 | Advanced | 5 | ~60-100 |
 
 ## Known Blockers
-_(none logged yet — add here as they come up, with the phase they're blocking)_
+- **Phase 0 → real backend connections.** Need a Supabase project (URL + anon key) and a Clerk project (publishable key), entered into `.env`. App compiles and runs with placeholders and shows setup cards until then. Owner: user.
 
 ## Open Decisions
 - [ ] Daily goal word count on Home Dashboard — hardcoded at 20 for v1; revisit if it should be user-configurable.
@@ -51,4 +51,4 @@ _(none logged yet — add here as they come up, with the phase they're blocking)
 
 ---
 
-**Last updated:** [date] by [name]
+**Last updated:** 2026-09-25 by Qoder (Phase 0 partial — commit `fbed274`)

@@ -9,13 +9,13 @@ Each phase has a goal, tasks, and an exit criterion — don't start the next pha
 ## Phase 0 — Environment & Installation
 **Goal:** a clean machine can go from nothing to a running (empty) app talking to real backend services.
 
-- [ ] Install Node.js LTS, a package manager (npm/yarn/pnpm — pick one), Expo CLI, EAS CLI (`npm install -g eas-cli`)
+- [x] Install Node.js LTS, a package manager (npm/yarn/pnpm — pick one), Expo CLI, EAS CLI (`npm install -g eas-cli`) — done: Node 22 LTS, npm, EAS CLI 23.2.0
 - [ ] Run the app via Expo's own emulator/simulator (`npx expo start` → press `a` for Android or `i` for iOS) or Expo Go on a physical device — no separate Android Studio install needed
-- [ ] `npx create-expo-app taglingo --template` (TypeScript template)
-- [ ] Initialize `expo-router` navigation structure
-- [ ] Install dependencies: `@clerk/clerk-expo`, `@supabase/supabase-js`, `@tanstack/react-query`, `react-hook-form`, `zod`, `expo-notifications`
+- [x] `npx create-expo-app taglingo --template` (TypeScript template)
+- [x] Initialize `expo-router` navigation structure
+- [x] Install dependencies: `@clerk/clerk-expo`, `@supabase/supabase-js`, `@tanstack/react-query`, `react-hook-form`, `zod`, `expo-notifications`
 - [ ] Create Supabase project (URL + anon key), Clerk project (publishable key)
-- [ ] Create `.env` (uncommitted) and `.env.example` (committed) with the Supabase/Clerk keys
+- [x] Create `.env` (uncommitted) and `.env.example` (committed) with the Supabase/Clerk keys
 - [ ] `npx expo start` runs without error; a trivial Supabase query and a Clerk sign-in screen both work
 
 **Exit criterion:** empty app runs, connects to Supabase, connects to Clerk.
