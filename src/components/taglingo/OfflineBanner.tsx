@@ -1,3 +1,4 @@
+import NetInfo from '@react-native-community/netinfo';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 
@@ -6,25 +7,22 @@ import { AppText } from '@/components/ui/Text';
 import { SproutMark } from '@/components/taglingo/LogoMark';
 import { Spacing } from '@/constants/theme';
 import { useAppState } from '@/lib/app-state';
-import { useOnline } from '@/hooks/use-offline';
 
 /**
  * Compact offline state, shown at the top of screens that keep working.
  * The offline screen itself is a full page; this is the gentler variant.
+ * "Try again" re-checks the real connectivity, not a fake timer (§11).
  */
 export function OfflineBanner() {
-  const online = useOnline();
   const { actions } = useAppState();
   const [checking, setChecking] = useState(false);
 
-  const handleRetry = () => {
+  const handleRetry = async () => {
     if (checking) return;
-    if (online) {
-      actions.dismissOffline();
-      return;
-    }
     setChecking(true);
-    setTimeout(() => setChecking(false), 1200);
+    const state = await NetInfo.fetch();
+    setChecking(false);
+    if (state.isConnected) actions.dismissOffline();
   };
 
   return (

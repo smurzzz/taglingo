@@ -22,6 +22,19 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 
 WebBrowser.maybeCompleteAuthSession();
 
+/**
+ * Terms / Privacy open in the external system browser (decision documented in
+ * 08-PROGRESS-TRACKER.md): `expo-web-browser` is already a dependency (used for
+ * OAuth), no webview is embedded, and the user keeps full browser affordances
+ * (back, share, copy). URLs are placeholders until the TagLingo marketing site
+ * ships — the pages live in the same place the web prototype is hosted.
+ */
+const TERMS_URL = 'https://taglingo.app/terms';
+const PRIVACY_URL = 'https://taglingo.app/privacy';
+
+/** Basic shape validation only — Clerk does the authoritative check on submit. */
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /** Dev fallback when Clerk isn't configured — refuse gracefully instead of crashing. */
 function AuthUnavailableScreen() {
   const theme = useThemeColors();
@@ -74,6 +87,15 @@ function ClerkLoginScreen() {
   const [error, setError] = useState<string | null>(null);
 
   const dirty = busy !== 'none';
+  const validEmail = EMAIL_RE.test(email.trim());
+
+  const openLegal = async (url: string) => {
+    try {
+      await WebBrowser.openBrowserAsync(url);
+    } catch {
+      setError('Could not open that page — try again in a moment.');
+    }
+  };
 
   const messageFor = (err: unknown): string => {
     if (isClerkAPIResponseError(err)) {
@@ -253,7 +275,12 @@ function ClerkLoginScreen() {
                 />
               </View>
 
-              <Button variant="sage" onPress={continueWithEmail} loading={busy === 'continue'} disabled={dirty}>
+              <Button
+                variant="sage"
+                onPress={continueWithEmail}
+                loading={busy === 'continue'}
+                disabled={dirty || !validEmail}
+              >
                 Continue with email
               </Button>
             </View>
@@ -366,9 +393,34 @@ function ClerkLoginScreen() {
             </Button>
           </View>
 
-          <AppText variant="caption" muted center style={styles.terms}>
-            By continuing, you agree to our{'\n'}Terms of Use and Privacy Policy.
-          </AppText>
+          <View style={styles.terms}>
+            <AppText variant="caption" muted center>
+              By continuing, you agree to our
+            </AppText>
+            <View style={styles.termsLinks}>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => void openLegal(TERMS_URL)}
+                hitSlop={8}
+              >
+                <AppText variant="caption" center style={{ color: theme.primary, fontWeight: '600' }}>
+                  Terms of Use
+                </AppText>
+              </Pressable>
+              <AppText variant="caption" muted>
+                ·
+              </AppText>
+              <Pressable
+                accessibilityRole="link"
+                onPress={() => void openLegal(PRIVACY_URL)}
+                hitSlop={8}
+              >
+                <AppText variant="caption" center style={{ color: theme.primary, fontWeight: '600' }}>
+                  Privacy Policy
+                </AppText>
+              </Pressable>
+            </View>
+          </View>
         </ScrollView>
       </KeyboardAvoidingView>
     </View>
@@ -460,6 +512,12 @@ const styles = StyleSheet.create({
   },
   terms: {
     marginTop: 'auto',
-    lineHeight: 18,
+    gap: Spacing.one,
+    alignItems: 'center',
+  },
+  termsLinks: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.two,
   },
 });

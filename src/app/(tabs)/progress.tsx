@@ -1,6 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui/Text';
@@ -8,8 +8,10 @@ import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { ProgressBar } from '@/components/ui/ProgressBar';
+import { SearchBar } from '@/components/ui/SearchBar';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { ScreenHeader } from '@/components/taglingo/ScreenHeader';
+import { DefinitionSheet } from '@/components/taglingo/DefinitionSheet';
 import { StatTile } from '@/components/taglingo/StatTile';
 import { WeekChart } from '@/components/taglingo/WeekChart';
 import { WordRow } from '@/components/taglingo/WordRow';
@@ -23,6 +25,7 @@ import {
   useProgressSnapshot,
   useProgressSummary,
   useStatusCounts,
+  useToggleFavorite,
   useTouchedWords,
   type WordFilter,
 } from '@/features/progress/api';
@@ -43,14 +46,44 @@ export default function ProgressScreen() {
   const router = useRouter();
   const theme = useThemeColors();
   const [filter, setFilter] = useState<WordFilter>('all');
+  const [searching, setSearching] = useState(false);
+  const [query, setQuery] = useState('');
+  const [debounced, setDebounced] = useState('');
+  const [detailId, setDetailId] = useState<string | null>(null);
 
   const summary = useProgressSummary();
   const counts = useStatusCounts();
   const myWords = useTouchedWords(filter);
   const snapshot = useProgressSnapshot();
+  const toggleFavorite = useToggleFavorite();
+
+  // ~300ms debounce so typing "Tagalog" doesn't re-render each keystroke (§8)
+  useEffect(() => {
+    const timer = setTimeout(() => setDebounced(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const isFavorite = (wordId: string) => snapshot.data?.favorites.includes(wordId) ?? false;
   const statusOf = (wordId: string) => snapshot.data?.status[wordId] ?? 'new';
+
+  // newest-updated first, then narrowed by the debounced search spelling
+  const visible = useMemo(() => {
+    let list = [...(myWords.data ?? [])];
+    const updated = snapshot.data?.updatedAt;
+    if (updated) {
+      list.sort((a, b) => (updated[b.id] ?? '').localeCompare(updated[a.id] ?? ''));
+    }
+    const q = debounced.trim().toLowerCase();
+    if (!q) return list;
+    return list.filter(
+      (word) =>
+        word.tagalog.toLowerCase().includes(q) ||
+        word.cebuano.toLowerCase().includes(q) ||
+        word.english.toLowerCase().includes(q),
+    );
+  }, [myWords.data, snapshot.data?.updatedAt, debounced]);
+
+  const detailWord = myWords.data?.find((word) => word.id === detailId);
 
   const weekTotal = summary.data?.weeklyMinutes.reduce((sum, value) => sum + value, 0) ?? 0;
   const goalPercent = Math.min(
@@ -60,9 +93,33 @@ export default function ProgressScreen() {
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
-      <ScreenHeader title="Progress" onBack={() => router.push('/')} />
+      <ScreenHeader
+        title="Progress"
+        onBack={() => router.push('/')}
+        right={
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={searching ? 'Close search' : 'Search words'}
+            onPress={() => {
+              setSearching((value) => !value);
+              setQuery('');
+              setDebounced('');
+            }}
+            hitSlop={8}
+            style={styles.headerIcon}
+          >
+            <Ionicons
+              name={searching ? 'close' : 'search-outline'}
+              size={20}
+              color={theme.mutedForeground}
+            />
+          </Pressable>
+        }
+      />
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        {searching ? <SearchBar value={query} onChangeText={setQuery} /> : null}
+
         {summary.isPending ? (
           <SkeletonList rows={2} />
         ) : summary.isError ? (
@@ -184,25 +241,38 @@ export default function ProgressScreen() {
                 : 'Study some words and they will show up here.'
             }
           />
+        ) : visible.length === 0 ? (
+          <EmptyState
+            title="No matching words"
+            hint="Try a different search or word filter."
+          />
         ) : (
           <View style={styles.list}>
-            {myWords.data.map((word) => (
+            {visible.map((word) => (
               <WordRow
                 key={word.id}
                 word={word}
                 status={statusOf(word.id)}
                 favorite={isFavorite(word.id)}
-                onPress={() =>
-                  router.push({
-                    pathname: '/study',
-                    params: { level: word.level, start: word.id },
-                  })
-                }
+                onPress={() => setDetailId(word.id)}
               />
             ))}
           </View>
         )}
       </ScrollView>
+
+      {/* Read-only Word Detail — reuses the §5 Definition sheet; tapping a row
+          never starts a study session. */}
+      <DefinitionSheet
+        word={detailWord}
+        favorite={detailWord ? isFavorite(detailWord.id) : false}
+        visible={!!detailId}
+        status={detailWord ? statusOf(detailWord.id) : undefined}
+        onToggleFavorite={() => {
+          if (detailWord && !toggleFavorite.isPending) toggleFavorite.mutate(detailWord.id);
+        }}
+        onClose={() => setDetailId(null)}
+      />
     </View>
   );
 }
@@ -344,5 +414,8 @@ const styles = StyleSheet.create({
   },
   chipBordered: {
     borderWidth: 1,
+  },
+  headerIcon: {
+    padding: Spacing.two,
   },
 });

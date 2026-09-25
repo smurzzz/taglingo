@@ -80,6 +80,7 @@ export default function StudyScreen() {
   const [flipped, setFlipped] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [offlineNotice, setOfflineNotice] = useState(false);
 
   useEffect(() => {
     // only reset when the level actually changes — the first render must keep
@@ -114,7 +115,12 @@ export default function StudyScreen() {
   const progress = levelProgress(snapshotStatus ?? {}, level.id);
 
   const advance = (result: 'mastered' | 'learning') => {
-    if (!word) return;
+    if (!word || gradeWord.isPending) return;
+    if (offline) {
+      setOfflineNotice(true);
+      return;
+    }
+    setOfflineNotice(false);
     gradeWord.mutate({ wordId: word.id, result });
     setFlipped(false);
     if (index + 1 >= deck.length) {
@@ -124,11 +130,24 @@ export default function StudyScreen() {
     }
   };
 
+  const onToggleFavorite = () => {
+    if (!word || toggleFavorite.isPending) return;
+    if (offline) {
+      setOfflineNotice(true);
+      return;
+    }
+    setOfflineNotice(false);
+    toggleFavorite.mutate(word.id);
+  };
+
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
       <ScreenHeader
         title={`${Math.min(index + 1, deck.length)} / ${deck.length}`}
-        onClose={() => router.push('/')}
+        onClose={() => {
+          if (router.canGoBack()) router.back();
+          else router.push('/');
+        }}
         right={
           <Pressable
             accessibilityLabel="Take the quiz"
@@ -232,12 +251,23 @@ export default function StudyScreen() {
               flipped={flipped}
               favorite={favorite}
               onFlip={() => setFlipped((value) => !value)}
-              onToggleFavorite={() => toggleFavorite.mutate(word.id)}
+              onToggleFavorite={onToggleFavorite}
               onOpenDefinition={() => setSheetOpen(true)}
             />
 
+            {offlineNotice ? (
+              <AppText variant="caption" muted center style={styles.offlineNotice}>
+                You&apos;re offline — nothing can be saved. Reconnect and try again.
+              </AppText>
+            ) : null}
+
             <View style={styles.gradeRow}>
-              <Button variant="outline" onPress={() => advance('learning')} style={styles.gradeButton}>
+              <Button
+                variant="outline"
+                onPress={() => advance('learning')}
+                disabled={gradeWord.isPending}
+                style={styles.gradeButton}
+              >
                 <View style={styles.outlineButton}>
                   <Ionicons name="refresh" size={16} color={theme.foreground} />
                   <AppText variant="label" style={styles.outlineButtonLabel}>
@@ -245,7 +275,12 @@ export default function StudyScreen() {
                   </AppText>
                 </View>
               </Button>
-              <Button variant="sage" onPress={() => advance('mastered')} style={styles.gradeButton}>
+              <Button
+                variant="sage"
+                onPress={() => advance('mastered')}
+                disabled={gradeWord.isPending}
+                style={styles.gradeButton}
+              >
                 <View style={styles.outlineButton}>
                   <Ionicons name="checkmark" size={16} color={theme.primaryForeground} />
                   <AppText
@@ -272,10 +307,8 @@ export default function StudyScreen() {
         word={word}
         favorite={favorite}
         visible={sheetOpen}
-        onToggleFavorite={() => {
-          if (!word) return;
-          toggleFavorite.mutate(word.id);
-        }}
+        status={snapshot.data?.status[word?.id ?? ''] ?? 'new'}
+        onToggleFavorite={onToggleFavorite}
         onClose={() => setSheetOpen(false)}
       />
     </View>
@@ -349,5 +382,8 @@ const styles = StyleSheet.create({
   },
   progressCaption: {
     marginTop: Spacing.one,
+  },
+  offlineNotice: {
+    textAlign: 'center',
   },
 });

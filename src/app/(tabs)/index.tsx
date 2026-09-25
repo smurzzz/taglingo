@@ -1,6 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Modal, Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Button } from '@/components/ui/Button';
@@ -15,9 +16,14 @@ import { Radius, Spacing } from '@/constants/theme';
 import { useAppState } from '@/lib/app-state';
 import { useIsOffline } from '@/hooks/use-offline';
 import { useThemeColors } from '@/hooks/use-theme-colors';
+import { formatTime } from '@/lib/utils';
 import { levelProgress } from '@/lib/derived';
 import { useLevels } from '@/features/words/api';
-import { useProgressSnapshot, useProgressSummary } from '@/features/progress/api';
+import {
+  useProgressSnapshot,
+  useProgressSummary,
+  useTouchedWords,
+} from '@/features/progress/api';
 import { useAuthUser } from '@/features/user/api';
 
 const greeting = () => {
@@ -25,6 +31,13 @@ const greeting = () => {
   if (hour < 12) return 'Good morning';
   if (hour < 18) return 'Good afternoon';
   return 'Good evening';
+};
+
+const greetingIcon = () => {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'sunny-outline';
+  if (hour < 18) return 'partly-sunny-outline';
+  return 'moon-outline';
 };
 
 /** Home Dashboard (functionality prompt §2): streak, mastery, resume, daily goal. */
@@ -39,6 +52,9 @@ export default function HomeScreen() {
   const levels = useLevels();
   const snapshot = useProgressSnapshot();
   const summary = useProgressSummary();
+  const touched = useTouchedWords('all');
+
+  const [notifOpen, setNotifOpen] = useState(false);
 
   const refreshing = levels.isRefetching || summary.isRefetching;
 
@@ -49,6 +65,32 @@ export default function HomeScreen() {
   const currentProgress = currentLevel
     ? levelProgress(status, currentLevel.id)
     : null;
+
+  // last-studied level = the word the user most recently graded/favorited
+  const resumeLevelId = useMemo(() => {
+    const updated = snapshot.data?.updatedAt;
+    if (!updated) return undefined;
+    let bestId: string | undefined;
+    let best = '';
+    for (const word of touched.data ?? []) {
+      const ts = updated[word.id];
+      if (ts && ts > best) {
+        best = ts;
+        bestId = word.id;
+      }
+    }
+    return touched.data?.find((word) => word.id === bestId)?.level;
+  }, [touched.data, snapshot.data?.updatedAt]);
+  const studyLevel = resumeLevelId ?? currentLevel?.id ?? 'beginner';
+
+  const streak = summary.data?.streak ?? 0;
+  const streakAlert =
+    streak > 0
+      ? `You hit a ${streak}-day streak — keep it going!`
+      : 'Study today to start your streak.';
+  const reminderAlert = state.reminder.enabled
+    ? `Daily reminder set for ${formatTime(state.reminder.time)}.`
+    : 'Study reminders are turned off.';
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
@@ -70,14 +112,14 @@ export default function HomeScreen() {
         }
       >
         <View style={styles.header}>
-          <Ionicons name="sunny-outline" size={24} color={theme.honey} />
+          <Ionicons name={greetingIcon()} size={24} color={theme.honey} />
           <AppText variant="title" bold style={styles.greeting} numberOfLines={1}>
             {greeting()}, {auth.firstName}
           </AppText>
           <Pressable
             accessibilityLabel="Notifications"
             accessibilityRole="button"
-            onPress={() => router.push('/settings')}
+            onPress={() => setNotifOpen(true)}
             hitSlop={8}
             style={styles.bell}
           >
@@ -87,6 +129,38 @@ export default function HomeScreen() {
             ) : null}
           </Pressable>
         </View>
+
+        <Modal
+          visible={notifOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setNotifOpen(false)}
+        >
+          <View style={styles.dropRoot}>
+            <Pressable
+              accessibilityLabel="Close notifications"
+              style={StyleSheet.absoluteFill}
+              onPress={() => setNotifOpen(false)}
+            />
+            <View style={[styles.dropCard, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <AppText variant="overline" muted>
+                Recent alerts
+              </AppText>
+              <View style={styles.dropRow}>
+                <Ionicons name="flame" size={18} color={theme.flame} />
+                <AppText variant="label" style={styles.dropText}>
+                  {streakAlert}
+                </AppText>
+              </View>
+              <View style={styles.dropRow}>
+                <Ionicons name="notifications-outline" size={18} color={theme.primary} />
+                <AppText variant="label" style={styles.dropText}>
+                  {reminderAlert}
+                </AppText>
+              </View>
+            </View>
+          </View>
+        </Modal>
 
         {offline ? <OfflineBanner /> : null}
 
@@ -108,10 +182,7 @@ export default function HomeScreen() {
 
         <Button
           variant="sage"
-          onPress={() =>
-            currentLevel &&
-            router.push({ pathname: '/study', params: { level: currentLevel.id } })
-          }
+          onPress={() => router.push({ pathname: '/study', params: { level: studyLevel } })}
           disabled={!currentLevel}
         >
           <View style={styles.primaryButton}>
@@ -136,7 +207,7 @@ export default function HomeScreen() {
 
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push('/progress')}
+          onPress={() => router.push({ pathname: '/study', params: { level: studyLevel } })}
           style={({ pressed }) => [
             styles.rowCard,
             { backgroundColor: theme.card, borderColor: theme.border, opacity: pressed ? 0.9 : 1 },
@@ -213,6 +284,35 @@ const styles = StyleSheet.create({
     height: 8,
     width: 8,
     borderRadius: 999,
+  },
+  dropRoot: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: 132,
+    paddingHorizontal: Spacing.five,
+  },
+  dropCard: {
+    minWidth: 260,
+    gap: Spacing.three,
+    borderWidth: 1,
+    borderRadius: Radius.xl,
+    paddingHorizontal: Spacing.five,
+    paddingVertical: Spacing.four,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  dropRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: Spacing.three,
+  },
+  dropText: {
+    flex: 1,
+    fontSize: 14,
   },
   tiles: {
     flexDirection: 'row',

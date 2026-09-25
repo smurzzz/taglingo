@@ -9,7 +9,7 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { Radius, Spacing } from '@/constants/theme';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { useDefinition } from '@/features/words/api';
-import type { Word } from '@/mocks/words';
+import type { Word, WordStatus } from '@/mocks/words';
 
 function SheetRow({
   icon,
@@ -38,17 +38,24 @@ function SheetRow({
  * Definition Lookup bottom sheet (functionality prompt §5). Loading while the
  * live request is in flight; a `{ found: false }` response renders the
  * graceful "no definition" state, never a generic error screen.
+ *
+ * Dismissal: tap the backdrop, tap outside, or the header × — the same action
+ * as a swipe-down; the stub handle is a visual affordance (decision recorded
+ * in 08-PROGRESS-TRACKER.md). `status` drives the badge shown next to the
+ * English face (Flashcard Study and the Word Progress detail both pass it).
  */
 export function DefinitionSheet({
   word,
   favorite,
   visible,
+  status,
   onToggleFavorite,
   onClose,
 }: {
   word: Word | undefined;
   favorite: boolean;
   visible: boolean;
+  status?: WordStatus;
   onToggleFavorite: () => void;
   onClose: () => void;
 }) {
@@ -72,13 +79,16 @@ export function DefinitionSheet({
         >
           {word ? (
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+              <View style={styles.handleWrap}>
+                <View style={[styles.handle, { backgroundColor: theme.border }]} />
+              </View>
               <View style={styles.header}>
                 <View style={styles.headerText}>
                   <AppText variant="display" bold style={styles.title}>
                     {word.cebuano}
                   </AppText>
                   <View style={styles.subtitle}>
-                    <StatusBadge variant="mastered" uppercase />
+                    {status ? <StatusBadge variant={status} uppercase /> : null}
                     <AppText variant="label" muted>
                       Tagalog: {word.tagalog}
                     </AppText>
@@ -172,6 +182,15 @@ const styles = StyleSheet.create({
   },
   content: {
     gap: Spacing.five,
+  },
+  handleWrap: {
+    alignItems: 'center',
+    paddingVertical: Spacing.two,
+  },
+  handle: {
+    width: 48,
+    height: 5,
+    borderRadius: 999,
   },
   header: {
     flexDirection: 'row',

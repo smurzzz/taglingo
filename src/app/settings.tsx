@@ -1,7 +1,9 @@
+import DateTimePicker, { type DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { Ionicons } from '@expo/vector-icons';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { Platform, Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { AppText } from '@/components/ui/Text';
 import { BottomNav } from '@/components/taglingo/BottomNav';
@@ -13,54 +15,6 @@ import { useThemeColors } from '@/hooks/use-theme-colors';
 import { formatTime } from '@/lib/utils';
 import { getReminderPermission, requestReminderPermission } from '@/features/notifications/api';
 import { useUpdateAccountPreferences } from '@/features/user/api';
-
-function Stepper({
-  value,
-  onChange,
-  minimum,
-  maximum,
-  step,
-  disabled,
-}: {
-  value: number;
-  onChange: (value: number) => void;
-  minimum: number;
-  maximum: number;
-  step: number;
-  disabled: boolean;
-}) {
-  const theme = useThemeColors();
-  const clamp = (next: number) => Math.min(maximum, Math.max(minimum, next));
-  const wrap = (next: number) => (next < minimum ? maximum : next > maximum ? minimum : next);
-
-  return (
-    <View style={[styles.stepper, { borderColor: theme.border, opacity: disabled ? 0.5 : 1 }]}>
-      <Pressable
-        accessibilityLabel="Decrease"
-        accessibilityRole="button"
-        disabled={disabled}
-        onPress={() => onChange(wrap(value - step))}
-        hitSlop={8}
-        style={styles.stepperButton}
-      >
-        <Ionicons name="remove" size={16} color={theme.foreground} />
-      </Pressable>
-      <AppText variant="label" bold style={styles.stepperValue}>
-        {String(clamp(value)).padStart(2, '0')}
-      </AppText>
-      <Pressable
-        accessibilityLabel="Increase"
-        accessibilityRole="button"
-        disabled={disabled}
-        onPress={() => onChange(wrap(value + step))}
-        hitSlop={8}
-        style={styles.stepperButton}
-      >
-        <Ionicons name="add" size={16} color={theme.foreground} />
-      </Pressable>
-    </View>
-  );
-}
 
 /** Theme preview tile — a tiny mock UI in light or dark. */
 function ThemePreview({ mode, active, onSelect }: { mode: 'light' | 'dark'; active: boolean; onSelect: () => void }) {
@@ -115,6 +69,7 @@ export default function SettingsScreen() {
   const { state, actions } = useAppState();
   const { signOut } = useAppAuth();
   const persist = useUpdateAccountPreferences();
+  const queryClient = useQueryClient();
 
   const applyReminder = (reminder: { enabled: boolean; time: string }) => {
     actions.setReminder(reminder);
@@ -133,6 +88,13 @@ export default function SettingsScreen() {
     void getReminderPermission().then((granted) => setNotificationsDenied(!granted));
   }, [state.reminder.enabled]);
 
+  // appearance previews never commit: tapping a tile only sets a transient
+  // draft, discarded on leave — the switch is the single commit point (§10)
+  const [draftMode, setDraftMode] = useState<'light' | 'dark'>(state.darkMode ? 'dark' : 'light');
+  if (state.darkMode !== (draftMode === 'dark')) {
+    setDraftMode(state.darkMode ? 'dark' : 'light');
+  }
+
   const toggleReminder = async (enabled: boolean) => {
     if (enabled) {
       const granted = await requestReminderPermission();
@@ -144,12 +106,33 @@ export default function SettingsScreen() {
     applyReminder({ ...state.reminder, enabled });
   };
 
-  const [hours, minutes] = state.reminder.time.split(':').map(Number);
-  const setTime = (nextHours: number, nextMinutes: number) =>
-    applyReminder({
-      ...state.reminder,
-      time: `${String(nextHours).padStart(2, '0')}:${String(nextMinutes).padStart(2, '0')}`,
-    });
+  // native time picker — the OS dialog (Android) or in-line spinner (iOS)
+  const [timeWheel, setTimeWheel] = useState(false);
+  const [pendingTime, setPendingTime] = useState<Date | null>(null);
+
+  const openTimePicker = () => {
+    if (!state.reminder.enabled) return;
+    const [h, m] = state.reminder.time.split(':').map(Number);
+    const base = new Date();
+    base.setHours(Number.isNaN(h) ? 19 : h, Number.isNaN(m) ? 30 : m, 0, 0);
+    setPendingTime(base);
+    setTimeWheel(true);
+  };
+  const commitTime = (date: Date) => {
+    setTimeWheel(false);
+    setPendingTime(null);
+    const next = `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+    applyReminder({ ...state.reminder, time: next });
+  };
+  const onTimeChange = (event: DateTimePickerEvent, date?: Date) => {
+    if (Platform.OS === 'android') {
+      setTimeWheel(false);
+      setPendingTime(null);
+      if (event.type === 'set' && date) commitTime(date);
+    } else if (date) {
+      setPendingTime(date);
+    }
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: theme.background }]}>
@@ -188,36 +171,61 @@ export default function SettingsScreen() {
             </View>
           ) : null}
 
-          <View style={[styles.row, styles.rowBorder, { borderColor: theme.border }]}>
-            <AppText variant="label" style={styles.rowTitle}>
-              Daily reminder time
-            </AppText>
-            <View style={styles.timeControls}>
-              <Stepper
-                value={Number.isNaN(hours) ? 19 : hours}
-                onChange={(next) => setTime(next, Number.isNaN(minutes) ? 30 : minutes)}
-                minimum={0}
-                maximum={23}
-                step={1}
-                disabled={!state.reminder.enabled}
-              />
-              <AppText variant="label" muted bold>
-                :
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Daily reminder time"
+            disabled={!state.reminder.enabled}
+            onPress={openTimePicker}
+            style={({ pressed }) => [
+              styles.row,
+              styles.rowBorder,
+              { borderColor: theme.border, opacity: state.reminder.enabled && !pressed ? 1 : 0.4 },
+            ]}
+          >
+            <View style={styles.rowText}>
+              <AppText variant="label" style={styles.rowTitle}>
+                Daily reminder time
               </AppText>
-              <Stepper
-                value={Number.isNaN(minutes) ? 30 : minutes}
-                onChange={(next) => setTime(Number.isNaN(hours) ? 19 : hours, next)}
-                minimum={0}
-                maximum={55}
-                step={5}
-                disabled={!state.reminder.enabled}
-              />
-              <AppText variant="caption" muted style={styles.timeHint}>
-                {formatTime(state.reminder.time)}
+              <AppText variant="caption" muted>
+                {state.reminder.enabled
+                  ? 'Pick a time for your nudge'
+                  : 'Enable reminders to pick a time'}
               </AppText>
             </View>
-          </View>
+            <View style={styles.timeValue}>
+              <AppText variant="label" bold>
+                {formatTime(state.reminder.time)}
+              </AppText>
+              <Ionicons name="chevron-forward" size={16} color={theme.mutedForeground} />
+            </View>
+          </Pressable>
         </View>
+
+        {timeWheel && pendingTime ? (
+          Platform.OS === 'ios' ? (
+            <View style={[styles.timeSheet, { backgroundColor: theme.card, borderColor: theme.border }]}>
+              <View style={[styles.timeSheetHandle, { backgroundColor: theme.border }]} />
+              <DateTimePicker
+                value={pendingTime}
+                mode="time"
+                display="spinner"
+                onChange={onTimeChange}
+              />
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => commitTime(pendingTime)}
+                hitSlop={8}
+                style={styles.timeSheetDone}
+              >
+                <AppText variant="label" bold style={{ color: theme.primary }}>
+                  Done
+                </AppText>
+              </Pressable>
+            </View>
+          ) : (
+            <DateTimePicker value={pendingTime} mode="time" display="default" onChange={onTimeChange} />
+          )
+        ) : null}
 
         <AppText variant="overline" muted style={styles.sectionLabel}>
           Appearance
@@ -229,18 +237,21 @@ export default function SettingsScreen() {
             </AppText>
             <Switch
               value={state.darkMode}
-              onValueChange={applyDarkMode}
+              onValueChange={(value) => {
+                setDraftMode(value ? 'dark' : 'light');
+                applyDarkMode(value);
+              }}
               trackColor={{ false: theme.muted, true: theme.primary }}
               thumbColor="#FFFFFF"
               accessibilityLabel="Dark mode"
             />
           </View>
           <View style={styles.previews}>
-            <ThemePreview mode="light" active={!state.darkMode} onSelect={() => applyDarkMode(false)} />
-            <ThemePreview mode="dark" active={state.darkMode} onSelect={() => applyDarkMode(true)} />
+            <ThemePreview mode="light" active={draftMode === 'light'} onSelect={() => setDraftMode('light')} />
+            <ThemePreview mode="dark" active={draftMode === 'dark'} onSelect={() => setDraftMode('dark')} />
           </View>
           <AppText variant="caption" muted style={styles.previewHint}>
-            Tap a preview to switch light or dark theme.
+            Tap a preview to try it on — flip the switch to keep your choice.
           </AppText>
         </View>
 
@@ -271,6 +282,7 @@ export default function SettingsScreen() {
         <Pressable
           accessibilityRole="button"
           onPress={async () => {
+            queryClient.clear();
             await signOut();
             router.replace('/login');
           }}
@@ -326,30 +338,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '500',
   },
-  timeControls: {
+  timeValue: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.two,
   },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  timeSheet: {
     borderWidth: 1,
-    borderRadius: Radius.md,
+    borderRadius: Radius.xl,
+    padding: Spacing.five,
+    gap: Spacing.two,
   },
-  stepperButton: {
-    height: 32,
-    width: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
+  timeSheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 5,
+    borderRadius: 999,
   },
-  stepperValue: {
-    minWidth: 24,
-    textAlign: 'center',
-  },
-  timeHint: {
-    minWidth: 64,
-    textAlign: 'right',
+  timeSheetDone: {
+    alignSelf: 'flex-end',
+    paddingVertical: Spacing.two,
+    paddingHorizontal: Spacing.three,
   },
   deniedHint: {
     flex: 1,

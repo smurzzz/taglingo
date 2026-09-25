@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Circle } from 'react-native-svg';
 import { Ionicons } from '@expo/vector-icons';
@@ -139,16 +139,7 @@ export default function QuizResultsScreen() {
           ) : (
             <View style={styles.missedList}>
               {missedWords.map((word) => (
-                <Pressable
-                  key={word.id}
-                  style={[styles.missedRow, { borderColor: colors.border }]}
-                  onPress={() =>
-                    router.push({
-                      pathname: '/study',
-                      params: { level: word.level, start: word.id },
-                    })
-                  }
-                >
+                <View key={word.id} style={[styles.missedRow, { borderColor: colors.border }]}>
                   <View style={styles.missedText}>
                     <AppText variant="body" bold>
                       {word.cebuano}
@@ -157,8 +148,7 @@ export default function QuizResultsScreen() {
                       {word.tagalog} · {word.english}
                     </AppText>
                   </View>
-                  <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-                </Pressable>
+                </View>
               ))}
             </View>
           )}

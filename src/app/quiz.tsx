@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, View } from 'react-native';
+import { Alert, ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 
@@ -41,6 +41,19 @@ export default function QuizScreen() {
     [words.data],
   );
 
+  // quitting mid-quiz discards the attempt — quiz state only lands in
+  // `quiz_attempts` when the final question is answered (§6)
+  const confirmExit = () => {
+    Alert.alert('Exit quiz?', 'Your quiz progress will be lost — Exit anyway?', [
+      { text: 'Stay', style: 'cancel' },
+      {
+        text: 'Exit',
+        style: 'destructive',
+        onPress: () => router.replace({ pathname: '/study', params: { level: levelId } }),
+      },
+    ]);
+  };
+
   const [index, setIndex] = useState(0);
   const [correct, setCorrect] = useState<string[]>([]);
   const [missed, setMissed] = useState<string[]>([]);
@@ -65,7 +78,7 @@ export default function QuizScreen() {
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <ScreenHeader
           title="Quiz"
-          onClose={() => router.replace({ pathname: '/study', params: { level: levelId } })}
+          onClose={confirmExit}
         />
         <OfflineBanner />
         <View style={styles.body}>
@@ -80,7 +93,7 @@ export default function QuizScreen() {
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <ScreenHeader
           title="Quiz"
-          onClose={() => router.replace({ pathname: '/study', params: { level: levelId } })}
+          onClose={confirmExit}
         />
         <OfflineBanner />
         <View style={styles.body}>
@@ -128,7 +141,7 @@ export default function QuizScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScreenHeader
         title={`Question ${index + 1} of ${questions.length}`}
-        onClose={() => router.replace({ pathname: '/study', params: { level: levelId } })}
+        onClose={confirmExit}
       />
       <OfflineBanner />
 
