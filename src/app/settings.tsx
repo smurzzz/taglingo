@@ -165,8 +165,9 @@ export default function SettingsScreen() {
             <View style={[styles.row, styles.rowBorder, { borderColor: theme.border }]}>
               <Ionicons name="notifications-off-outline" size={16} color={theme.coral} />
               <AppText variant="caption" muted style={styles.deniedHint}>
-                Notifications are blocked on your device. Enable them in Settings for
-                daily reminders to appear.
+                Reminders need notification access, which Expo Go can&apos;t
+                provide — enable them in your device settings, or run a
+                development build to test reminders.
               </AppText>
             </View>
           ) : null}

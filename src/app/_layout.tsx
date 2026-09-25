@@ -2,7 +2,6 @@ import { ClerkProvider } from '@clerk/clerk-expo';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
 import NetInfo from '@react-native-community/netinfo';
 import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import * as Notifications from 'expo-notifications';
 import { Stack, usePathname, useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
@@ -15,7 +14,7 @@ import { useIsOffline } from '@/hooks/use-offline';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { backendConfig, env } from '@/lib/env';
 import { useEnsureUser } from '@/features/user/api';
-import { useReminderNotification } from '@/features/notifications/api';
+import { loadNotifications, useReminderNotification } from '@/features/notifications/api';
 
 const queryClient = new QueryClient();
 
@@ -101,21 +100,33 @@ function UserBootstrapper() {
 
 /**
  * Deep-links the daily reminder tap back into Home (data.url = "/").
+ * Uses an event listener instead of `useLastNotificationResponse` because the
+ * notifications module is only available on runtimes with its native code
+ * (Expo Go can't import it since SDK 53).
  */
-function useNotificationObserver() {
+function useNotificationResponseListener() {
   const router = useRouter();
-  const lastResponse = Notifications.useLastNotificationResponse();
 
   useEffect(() => {
-    const url = lastResponse?.notification.request.content.data?.url;
-    if (
-      lastResponse &&
-      typeof url === 'string' &&
-      lastResponse.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER
-    ) {
-      router.replace(url as Href);
-    }
-  }, [lastResponse, router]);
+    let unsubscribe: { remove(): void } | undefined;
+    void loadNotifications().then((Notifications) => {
+      if (!Notifications) return;
+      unsubscribe = Notifications.addNotificationResponseReceivedListener(
+        (response) => {
+          const url = response.notification.request.content.data?.url;
+          if (
+            response.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER &&
+            typeof url === 'string'
+          ) {
+            router.replace(url as Href);
+          }
+        },
+      );
+    });
+    return () => unsubscribe?.remove();
+  }, [router]);
+
+  return null;
 }
 
 function LoadingScreen() {
@@ -151,6 +162,7 @@ function RootNavigator() {
         }}
       >
         <Stack.Screen name="login" />
+        <Stack.Screen name="sso-callback" />
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="settings" />
         <Stack.Screen name="quiz" />
@@ -168,7 +180,7 @@ function RootNavigator() {
 /** Keeps the scheduled daily reminder in sync with the persisted preference. */
 function ReminderSync() {
   useReminderNotification();
-  useNotificationObserver();
+  useNotificationResponseListener();
   return null;
 }
 
