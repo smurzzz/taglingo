@@ -1,5 +1,6 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Switch, View } from 'react-native';
 
 import { AppText } from '@/components/ui/Text';
@@ -10,6 +11,7 @@ import { useAppState } from '@/lib/app-state';
 import { useAppAuth } from '@/lib/auth';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { formatTime } from '@/lib/utils';
+import { getReminderPermission, requestReminderPermission } from '@/features/notifications/api';
 import { useUpdateAccountPreferences } from '@/features/user/api';
 
 function Stepper({
@@ -123,6 +125,25 @@ export default function SettingsScreen() {
     persist.mutate({ dark_mode: value });
   };
 
+  const [notificationsDenied, setNotificationsDenied] = useState(false);
+
+  // refresh the denied hint from the real OS permission whenever a reminder is on
+  useEffect(() => {
+    if (!state.reminder.enabled) return;
+    void getReminderPermission().then((granted) => setNotificationsDenied(!granted));
+  }, [state.reminder.enabled]);
+
+  const toggleReminder = async (enabled: boolean) => {
+    if (enabled) {
+      const granted = await requestReminderPermission();
+      setNotificationsDenied(!granted);
+      if (!granted) return; // keep the switch off until permissions allow it
+    } else {
+      setNotificationsDenied(false);
+    }
+    applyReminder({ ...state.reminder, enabled });
+  };
+
   const [hours, minutes] = state.reminder.time.split(':').map(Number);
   const setTime = (nextHours: number, nextMinutes: number) =>
     applyReminder({
@@ -150,12 +171,22 @@ export default function SettingsScreen() {
             </View>
             <Switch
               value={state.reminder.enabled}
-              onValueChange={(enabled) => applyReminder({ ...state.reminder, enabled })}
+              onValueChange={toggleReminder}
               trackColor={{ false: theme.muted, true: theme.primary }}
               thumbColor="#FFFFFF"
               accessibilityLabel="Daily reminder"
             />
           </View>
+
+          {state.reminder.enabled && notificationsDenied ? (
+            <View style={[styles.row, styles.rowBorder, { borderColor: theme.border }]}>
+              <Ionicons name="notifications-off-outline" size={16} color={theme.coral} />
+              <AppText variant="caption" muted style={styles.deniedHint}>
+                Notifications are blocked on your device. Enable them in Settings for
+                daily reminders to appear.
+              </AppText>
+            </View>
+          ) : null}
 
           <View style={[styles.row, styles.rowBorder, { borderColor: theme.border }]}>
             <AppText variant="label" style={styles.rowTitle}>
@@ -319,6 +350,9 @@ const styles = StyleSheet.create({
   timeHint: {
     minWidth: 64,
     textAlign: 'right',
+  },
+  deniedHint: {
+    flex: 1,
   },
   previews: {
     flexDirection: 'row',

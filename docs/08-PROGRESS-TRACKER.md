@@ -14,7 +14,7 @@ Living status doc. Update this after every work session — it should always ref
 | 3 — Auth & Roles | Real account logs in, lands on Home Dashboard, Profile reflects real data | In progress | Code + DB live: migration `20260926000000_clerk_auth.sql` applied (users.id → text = Clerk `sub`, RLS via `auth.jwt()->>'sub'`, `ensure_user` RPC) and registered in `supabase_migrations.schema_migrations`; `src/types/database.ts` regenerated. New `src/lib/auth.tsx` + Clerk-bound `src/lib/supabase.ts` + `src/features/user/api.ts`; real Clerk login (`useSSO`, email-code); Profile/Settings wired; lint / tsc / expo-doctor clean. **Integration verified live:** Clerk↔Supabase Third Party Auth entry present via Management API (issuer `https://optimal-halibut-3418.clerk.accounts.dev`, type `clerk-development`, JWKS resolved); Clerk "Connect with Supabase" done. Only the final on-device login remains. |
 | 4 — Flashcard Study & Progress | Mastered word reflects instantly across Home/Browse/Progress | In progress | Code + DB done: migration `20260927000000_progress_word_status.sql` applied live (`'new'` enum value + `status` default) and registered in `supabase_migrations.schema_migrations`; `src/features/words/api.ts` + `src/features/progress/api.ts` read `words`/`word_progress`/`study_sessions` through the Clerk-bound client with a mock fallback; mutations (grade / favorite lifecycle / daily study session) upsert via RLS (simulated JWT claims verified live — CP-11/CP-12) and invalidate the progress/words keys. Study/Home/Browse/Progress/Profile rewired off the mock store; weekly history relabelled words, not minutes. Lint / tsc / expo-doctor clean. Remaining: on-device login (same as Phase 3) to see real rows and close the exit criterion. |
 | 5 — Definition Lookup & Quiz Mode | Full quiz runs end to end, missed word reviewable from results | In progress | Code + DB done: `useDefinition` calls the Free Dictionary API live (graceful `{ found: false }` on 404/network failure — holds even while the API itself was returning 522 during verification); `buildQuizFromDeck` builds up to 10 questions from real per-level words with same-level distractors; `quiz.tsx` records an attempt via new `src/features/quiz/api.ts` `useRecordQuizAttempt` plus the daily `study_sessions` touch; "Review these" passes the missed-word IDs and Study filters to them. `quiz_attempts` insert verified live under simulated JWT claims (CP-16). Lint / tsc / expo-doctor clean. Remaining: on-device run (same login blocker as Phases 3/4) to confirm the full quiz + definition flow end to end. |
-| 6 — Notifications & Offline State | Reminder fires; offline state shows correctly | Not started | |
+| 6 — Notifications & Offline State | Reminder fires; offline state shows correctly | In progress | Code done, device pending: `src/features/notifications/api.ts` (module-scope handler, Android channel, permission helpers, fixed-id DAILY schedule/cancel); `<ReminderSync/>` + `useNotificationObserver` (tap → Home) mounted in `_layout.tsx`; Settings requests permission on enable and shows a denied hint; React Query `onlineManager` bridged to NetInfo for auto-refetch on reconnect. Vocabulary expanded 23→165 (Beginner 68 / Intermediate 61 / Advanced 36) via idempotent migration `20260927000001_expand_vocabulary.sql` (applied + registered live, CP-17). Lint / tsc / expo-doctor clean. Remaining: on-device confirmation (reminder fires, network-cut recovery) — same login blocker as Phases 3/4/5. |
 | 7 — Polish, Test, Submit | Installable APK, demo runs start to finish, word count target met | Not started | |
 
 ## Critical-Path Test Status (mirrors `05-TESTING-REPORT.md`)
@@ -31,18 +31,20 @@ Living status doc. Update this after every work session — it should always ref
 | CP-14 | ✅ verified (Phase 5) — definition lookup fetches the live API, renders part of speech/definition/example, and degrades to the graceful miss on 404/network failure |
 | CP-15 | ✅ verified (Phase 5) — quiz questions + same-level distractors built from real per-level words; results ring/missed list resolve real word ids |
 | CP-16 | ✅ verified live (Phase 5) — one `quiz_attempts` row per completion, isolated per user, RLS blocks forging, never auto-grades `word_progress` |
+| CP-17 | ✅ verified live (Phase 6) — generator emits exactly the 142-word delta; expansion migration applied + registered, live counts Beginner 68 / Intermediate 61 / Advanced 36 |
+| CP-18 | 🔶 code verified (Phase 6) — reminder scheduling + permission flow + NetInfo→`onlineManager` reconnect; on-device fire/network-cut pending CP-10 login |
 | PS-01 | ✅ verified (Phase 4) — streak computed from `study_sessions` (consecutive days ending today/yesterday), weekly counts from `word_progress.updated_at` |
 | PS-02 | ✅ verified — completion % computed directly from `state.status` |
 | PS-03 | ✅ verified — favorites tracked independently of status |
 
 ## Vocabulary Seeding Progress
-Track expansion from the CSV template (23 starter words) toward the 200–300 word target (`01-PHASE-PLAN.md` Phase 6).
+Track expansion from the CSV template (23 starter words) toward the 200–300 word target (`01-PHASE-PLAN.md` Phase 6). Phase 6 took 23 → 165 words; remaining growth and a human translation-accuracy pass are deferred to Phase 7.
 
-| Level | Current Count | Target |
+| Level | Current Count (live) | Target |
 |---|---|---|
-| Beginner | 10 | ~70-100 |
-| Intermediate | 8 | ~70-100 |
-| Advanced | 5 | ~60-100 |
+| Beginner | 68 | ~70-100 |
+| Intermediate | 61 | ~70-100 |
+| Advanced | 36 | ~60-100 |
 
 ## Known Blockers
 - **No local Supabase verification path** — Docker is not installed on this machine, so `supabase start`/`db lint`/locally-restarting PostgREST can't run. Phase 2/3 migrations were applied and verified live via the Supabase Management API instead. DB-level `npx supabase link` + `supabase db push` can't run without the Postgres password; prefer the Management API (`POST /v1/projects/<ref>/database/query`) for any future DDL.
@@ -53,7 +55,8 @@ Track expansion from the CSV template (23 starter words) toward the 200–300 wo
 - [ ] Daily goal word count on Home Dashboard — hardcoded at 20 for v1; revisit if it should be user-configurable.
 - [ ] Word Progress row tap: navigate into single-word study, or open a read-only detail view? (`07-FUNCTIONALITY-PROMPT.md` §8)
 - [ ] Whether audio pronunciation (mentioned in `00-PROJECT-OVERVIEW.md` §1 but not built in v1) gets added before submission.
+- [ ] Human review pass over the Phase 6 vocabulary expansion (142 new Tagalog/Cebuano pairs) for translation accuracy before the 200–300 target is finalized in Phase 7.
 
 ---
 
-**Last updated:** 2026-09-27 (Phase 5 code + DB done — `useDefinition` calls the Free Dictionary API live with a graceful `{ found: false }` miss; `buildQuizFromDeck` generates same-level-distractor quizzes from real per-level words; `quiz.tsx`/`quiz-results.tsx`/`study.tsx` wired for real-word quizzes, `quiz_attempts` recording, and the missed-word "Review these" deep-link; `quiz_attempts` insert verified live under simulated Clerk JWT claims. Remaining, shared with Phases 3/4: on-device sign-in on Expo Go to close the exit criterion.)
+**Last updated:** 2026-09-27 (Phase 6 code done, device pending — `src/features/notifications/api.ts` schedules a fixed-id DAILY study reminder reconciled from the persisted `users.reminder_*` preference, Settings requests permission on enable with a denied hint, and `<ReminderSync/>`/`useNotificationObserver` are mounted in the root layout; React Query's `onlineManager` is bridged to NetInfo so offline-failed queries auto-refetch on reconnect. Vocabulary expanded 23→165 live words (Beginner 68 / Intermediate 61 / Advanced 36) via the idempotent `20260927000001_expand_vocabulary.sql` delta migration generated by the new `--write-expansion` mode — applied and versioned on `wvquienibojiphxamgnr`. Lint / tsc / expo-doctor clean. On-device confirmation — reminder fires, network-cut recovery, and the shared login from Phases 3/4/5 — is still pending.)

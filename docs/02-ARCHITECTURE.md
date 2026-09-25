@@ -9,11 +9,10 @@ TagLingo is a mobile client (Expo/React Native) talking to two backend pieces: *
      │
      ├──reads/writes (RLS-scoped)──> [Supabase Postgres]
      │
-     └──calls──> [Next.js API Route] ──fetches──> [Free Dictionary API]
-                  GET /api/definitions/:word
+     └──calls──> [Free Dictionary API]   (direct, no proxy — no server CORS on native)
 ```
 
-There is deliberately no admin panel and no write path into `words` from the client — vocabulary is seeded directly into Supabase (see `01-PHASE-PLAN.md` Phase 2).
+> Phase 5 moved the definition lookup client-side: React Native has no browser CORS, so the Expo app calls `https://api.dictionaryapi.dev` directly instead of proxying through Next.js (see §7). There is deliberately no admin panel and no write path into `words` from the client — vocabulary is seeded directly into Supabase (see `01-PHASE-PLAN.md` Phase 2).
 
 ## 2. Roles
 
@@ -44,7 +43,7 @@ TagLingo has a single authenticated role in v1: **Student Learner / Casual User*
 | `audio_url` | text, nullable | Storage path, if/when audio is added |
 | `created_at` | timestamptz | default `now()` |
 
-Seeded from `taglingo_words_template.csv` (see `01-PHASE-PLAN.md` Phase 2). Read-only for all client roles — no `INSERT`/`UPDATE`/`DELETE` grant exists for authenticated users on this table.
+Seeded from `taglingo_words_template.csv` (see `01-PHASE-PLAN.md` Phase 2; expanded in Phase 6 to 165 words: Beginner 68 / Intermediate 61 / Advanced 36). Read-only for all client roles — no `INSERT`/`UPDATE`/`DELETE` grant exists for authenticated users on this table. A unique index on `(tagalog, cebuano, english)` (Phase 6 expansion migration) makes future CSV-driven imports idempotent.
 
 ### 3.3 `word_progress`
 One row per (user, word) pair — created the first time a user interacts with a word.
@@ -134,4 +133,17 @@ This is the **only** live third-party API call in the system. Tagalog and Cebuan
 
 - **Security:** `words` being read-only for all client roles removes an entire class of data-integrity risk; there's no path for a user to corrupt shared vocabulary data.
 - **Consistency:** completion percentages and streaks are computed live from `word_progress`/`study_sessions` rather than cached counters, so there's exactly one source of truth per user-facing number.
-- **Offline handling:** the app requires connectivity for all reads/writes (`00-PROJECT-OVERVIEW.md` §4.2); the Offline State screen (`07-FUNCTIONALITY-PROMPT.md` §11) is the only UI response to connectivity loss — there is no local queue/sync-on-reconnect in v1.
+- **Offline handling:** the app requires connectivity for all reads/writes (`00-PROJECT-OVERVIEW.md` §4.2); the Offline State screen (`07-FUNCTIONALITY-PROMPT.md` §11) is the only UI response to connectivity loss. React Query's `onlineManager` is bridged to NetInfo so queries that failed while offline auto-refetch the moment the network returns (no manual retry, _idempotent_ since all writes are RLS-scoped upserts); there is still no local write queue in v1.
+
+## 9. Notifications — Daily Study Reminder
+
+A **local scheduled notification**, not a push server: there is no APNs/FCM/`expo push` infrastructure for v1. `src/features/notifications/api.ts` owns the whole surface:
+
+- `Notifications.setNotificationHandler` (module scope) chooses banner + list + sound and no badge while the app is foregrounded.
+- Native Android channel `study-reminders` (importance DEFAULT) is created before scheduling.
+- `scheduleDailyReminder(enabled, time)` schedules exactly one repeating **DAILY** trigger (`SchedulableTriggerInputTypes.DAILY`, `hour`/`minute`, `channelId`) under the fixed identifier `daily-study-reminder`; disabling cancels it. Re-scheduling under the same id replaces, never stacks.
+- `useReminderNotification()` reconciles the schedule with the persisted `users.reminder_enabled`/`reminder_time` and is mounted at boot in `_layout.tsx` (`<ReminderSync/>`).
+- `getReminderPermission`/`requestReminderPermission` treat iOS `PROVISIONAL` as granted; Settings requests permission only when the user flips the toggle on, keeps the switch off on denial, and shows a `notifications-denied` hint (and can't show a false "enabled" state — deny-on-enable means the schedule never runs).
+- `useNotificationObserver` (same sync component) deep-links a tapped reminder back to Home via `useLastNotificationResponse` + `data.url: "/"`.
+
+Because this is a local notification it requires no backend keys and works identically in mock/no-keys dev mode.

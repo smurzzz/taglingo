@@ -1,7 +1,9 @@
 import { ClerkProvider } from '@clerk/clerk-expo';
 import { tokenCache } from '@clerk/clerk-expo/token-cache';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { Stack, usePathname, useRouter } from 'expo-router';
+import NetInfo from '@react-native-community/netinfo';
+import { onlineManager, QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import * as Notifications from 'expo-notifications';
+import { Stack, usePathname, useRouter, type Href } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -13,8 +15,16 @@ import { useIsOffline } from '@/hooks/use-offline';
 import { useThemeColors } from '@/hooks/use-theme-colors';
 import { backendConfig, env } from '@/lib/env';
 import { useEnsureUser } from '@/features/user/api';
+import { useReminderNotification } from '@/features/notifications/api';
 
 const queryClient = new QueryClient();
+
+// React Query treats app connectivity as the NetInfo signal, so queries that
+// failed while offline refetch automatically the moment the network returns
+// (functionality prompt §11 — no manual retry).
+onlineManager.setEventListener((setOnline) =>
+  NetInfo.addEventListener((state) => setOnline(state.isConnected ?? true)),
+);
 
 /**
  * App-wide navigation rules (ported from the web prototype's AppGate):
@@ -89,6 +99,25 @@ function UserBootstrapper() {
   return null;
 }
 
+/**
+ * Deep-links the daily reminder tap back into Home (data.url = "/").
+ */
+function useNotificationObserver() {
+  const router = useRouter();
+  const lastResponse = Notifications.useLastNotificationResponse();
+
+  useEffect(() => {
+    const url = lastResponse?.notification.request.content.data?.url;
+    if (
+      lastResponse &&
+      typeof url === 'string' &&
+      lastResponse.actionIdentifier === Notifications.DEFAULT_ACTION_IDENTIFIER
+    ) {
+      router.replace(url as Href);
+    }
+  }, [lastResponse, router]);
+}
+
 function LoadingScreen() {
   const theme = useThemeColors();
   return (
@@ -131,8 +160,16 @@ function RootNavigator() {
       <StatusBar style={theme.background === '#12191C' ? 'light' : 'dark'} />
       <UserBootstrapper />
       <AppGate />
+      <ReminderSync />
     </>
   );
+}
+
+/** Keeps the scheduled daily reminder in sync with the persisted preference. */
+function ReminderSync() {
+  useReminderNotification();
+  useNotificationObserver();
+  return null;
 }
 
 export default function RootLayout() {
