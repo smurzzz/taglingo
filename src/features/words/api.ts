@@ -4,9 +4,10 @@
  * client, and fall back to the fixtures whenever Supabase is unavailable so
  * the no-keys demo path still works.
  *
- * Display-only fields (partOfSpeech, definition, example) don't exist in the
- * DB yet — `useDefinition` fills them in live from the Free Dictionary API
- * (Phase 5) when a word's English translation is tapped.
+ * Display fields: `part_of_speech` + `definition` are curated in the words
+ * table (migration 20260929000000) and mapped straight through; `useDefinition`
+ * shows them first and only reaches for the Free Dictionary API (Phase 5) when
+ * a word has no curated definition.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -57,8 +58,8 @@ export function mapWord(row: WordRow): Word {
     tagalog: row.tagalog,
     cebuano: row.cebuano,
     english: row.english,
-    partOfSpeech: '',
-    definition: '',
+    partOfSpeech: row.part_of_speech ?? '',
+    definition: row.definition ?? '',
     example: { language: 'cebuano', text: '', english: '' },
     initialStatus: 'new',
   };
@@ -181,10 +182,12 @@ interface DictionaryEntry {
 }
 
 /**
- * Definition lookup — Phase 5: calls the Free Dictionary API live for the
- * word's English translation (02-ARCHITECTURE §7). A 404, an entry with no
- * usable meaning, or any network failure resolves to `{ found: false }` so the
- * UI can render the graceful "no definition" state — never a generic error.
+ * Definition lookup. Curated first: when the word row already carries a
+ * `part_of_speech`/`definition` (migration 20260929000000) it resolves
+ * immediately, with no network call. Only otherwise does it call the Free
+ * Dictionary API for the English face (02-ARCHITECTURE §7); a 404, an entry
+ * with no usable meaning, or any network failure resolves to `{ found: false }`
+ * so the UI renders the graceful "no definition" state — never a generic error.
  */
 export function useDefinition(word: Word | undefined) {
   return useQuery({
@@ -193,6 +196,23 @@ export function useDefinition(word: Word | undefined) {
     staleTime: 60_000,
     queryFn: async (): Promise<DefinitionResult> => {
       if (!word) return { found: false };
+
+      // Curated entry ships with the word — instant, offline-friendly.
+      if (word.definition.trim()) {
+        return {
+          found: true,
+          word: {
+            ...word,
+            partOfSpeech: word.partOfSpeech || 'word',
+            example: {
+              language: 'english',
+              text: word.example.text,
+              english: word.example.english,
+            },
+          },
+        };
+      }
+
       const english = word.english.trim();
       if (!english) return { found: false };
       try {

@@ -134,20 +134,26 @@ export function DefinitionSheet({
                   <SheetRow icon="book-outline" label="English">
                     <AppText variant="label">{shown?.english ?? word.english}</AppText>
                   </SheetRow>
-                  <SheetRow icon="text-outline" label="Part of speech">
-                    <AppText variant="label">{shown?.partOfSpeech ?? word.partOfSpeech}</AppText>
-                  </SheetRow>
+                  {(shown?.partOfSpeech ?? word.partOfSpeech) ? (
+                    <SheetRow icon="text-outline" label="Part of speech">
+                      <AppText variant="label">{shown?.partOfSpeech ?? word.partOfSpeech}</AppText>
+                    </SheetRow>
+                  ) : null}
                   <SheetRow icon="information-circle-outline" label="Definition">
                     <AppText variant="label">{shown?.definition ?? word.definition}</AppText>
                   </SheetRow>
-                  <SheetRow icon="chatbubble-ellipses-outline" label="Example">
-                    <AppText variant="label" style={styles.italic}>
-                      {shown?.example.text ?? word.example.text}
-                    </AppText>
-                    <AppText variant="label" muted style={styles.exampleEnglish}>
-                      {word.example.english}
-                    </AppText>
-                  </SheetRow>
+                  {(shown?.example.text ?? word.example.text) ? (
+                    <SheetRow icon="chatbubble-ellipses-outline" label="Example">
+                      <AppText variant="label" style={styles.italic}>
+                        {shown?.example.text ?? word.example.text}
+                      </AppText>
+                      {word.example.english ? (
+                        <AppText variant="label" muted style={styles.exampleEnglish}>
+                          {word.example.english}
+                        </AppText>
+                      ) : null}
+                    </SheetRow>
+                  ) : null}
                 </View>
               )}
 

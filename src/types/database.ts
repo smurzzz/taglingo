@@ -1,7 +1,8 @@
 // TagLingo database types — mirror supabase/migrations/:
 //   20260925000000_schema.sql (tables/RLS), 20260925000001_seed_words.sql,
 //   20260926000000_clerk_auth.sql (Clerk sub as users.id, ensure_user RPC),
-//   20260927000000_progress_word_status.sql (status 'new' value + default).
+//   20260927000000_progress_word_status.sql (status 'new' value + default),
+//   20260929000000_word_definitions.sql (words.part_of_speech + definition).
 //
 // Hand-maintained to match the applied schema. When a live Supabase project
 // exists, regenerate the canonical copy with:
@@ -49,6 +50,8 @@ export type Database = {
           cebuano: string;
           english: string;
           level: PublicLevel;
+          part_of_speech: string | null;
+          definition: string | null;
           example_sentence: string | null;
           audio_url: string | null;
           created_at: string;
@@ -59,6 +62,8 @@ export type Database = {
           cebuano: string;
           english: string;
           level: PublicLevel;
+          part_of_speech?: string | null;
+          definition?: string | null;
           example_sentence?: string | null;
           audio_url?: string | null;
           created_at?: string;
@@ -69,6 +74,8 @@ export type Database = {
           cebuano?: string;
           english?: string;
           level?: PublicLevel;
+          part_of_speech?: string | null;
+          definition?: string | null;
           example_sentence?: string | null;
           audio_url?: string | null;
           created_at?: string;
