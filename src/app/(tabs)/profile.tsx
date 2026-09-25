@@ -3,6 +3,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 
 import { AppText } from '@/components/ui/Text';
+import { Avatar } from '@/components/ui/Avatar';
 import { Card } from '@/components/ui/Card';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { SkeletonList } from '@/components/ui/Skeleton';
@@ -52,11 +53,7 @@ export default function ProfileScreen() {
 
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
         <View style={styles.identity}>
-          <View style={[styles.avatar, { backgroundColor: theme.accent, borderColor: theme.border }]}>
-            <AppText variant="display" bold style={{ color: theme.accentForeground }}>
-              {auth.initials}
-            </AppText>
-          </View>
+          <Avatar imageUrl={auth.avatarUrl} initials={auth.initials} size={96} />
           <AppText variant="display" bold style={styles.name}>
             {auth.name || 'TagLingo learner'}
           </AppText>
@@ -157,14 +154,6 @@ const styles = StyleSheet.create({
   identity: {
     alignItems: 'center',
     gap: Spacing.two,
-  },
-  avatar: {
-    height: 96,
-    width: 96,
-    borderRadius: Radius.pill,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   name: {
     fontSize: 24,

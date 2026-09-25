@@ -9,6 +9,7 @@ import { Card } from '@/components/ui/Card';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { ProgressBar } from '@/components/ui/ProgressBar';
 import { AppText } from '@/components/ui/Text';
+import { Avatar } from '@/components/ui/Avatar';
 import { SkeletonList } from '@/components/ui/Skeleton';
 import { OfflineBanner } from '@/components/taglingo/OfflineBanner';
 import { StatTile } from '@/components/taglingo/StatTile';
@@ -116,6 +117,14 @@ export default function HomeScreen() {
           <AppText variant="title" bold style={styles.greeting} numberOfLines={1}>
             {greeting()}, {auth.firstName}
           </AppText>
+          <Pressable
+            accessibilityLabel="Your profile"
+            accessibilityRole="button"
+            onPress={() => router.push('/profile')}
+            hitSlop={4}
+          >
+            <Avatar imageUrl={auth.avatarUrl} initials={auth.initials} size={40} />
+          </Pressable>
           <Pressable
             accessibilityLabel="Notifications"
             accessibilityRole="button"

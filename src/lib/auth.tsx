@@ -21,6 +21,7 @@ export interface AuthUserIdentity {
   firstName: string;
   email: string;
   initials: string;
+  avatarUrl: string | null;
   joined: string | null;
 }
 
@@ -64,6 +65,7 @@ function useClerkAppAuth(): AppAuthStatus {
       firstName,
       email,
       initials,
+      avatarUrl: clerkUser?.imageUrl || null,
       joined: null,
     },
   };
@@ -90,6 +92,7 @@ function useMockAppAuth(): AppAuthStatus {
       firstName: name.split(' ')[0] || 'there',
       email,
       initials: user?.initials ?? 'TL',
+      avatarUrl: null,
       joined: user?.joined ?? null,
     },
   };
