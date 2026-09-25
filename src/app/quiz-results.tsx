@@ -183,7 +183,11 @@ export default function QuizResultsScreen() {
                 if (first) {
                   router.push({
                     pathname: '/study',
-                    params: { level: first.level, start: first.id },
+                    params: {
+                      level: first.level,
+                      start: first.id,
+                      review: quiz.missed.join(','),
+                    },
                   });
                 }
               }}

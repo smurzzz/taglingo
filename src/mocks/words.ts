@@ -6,14 +6,15 @@
  * `initialStatus`/`initialFavorite` exist only so the prototype opens with
  * realistic progress numbers.
  *
- * `mockLookupFails` simulates the Free Dictionary API returning no match for
- * a phrase (`{ found: false }`, architecture doc §7) so the Definition
- * Lookup "not found" state is reviewable in the demo.
+ * `mockLookupFails` mirrors the seeded words whose English translations the
+ * Free Dictionary API has no entry for — since Phase 5, `useDefinition` calls
+ * that API live, so the flag is no longer consulted by the app (kept so the
+ * "not found" case stays reviewable in fixtures).
  */
 
 export type LevelId = 'beginner' | 'intermediate' | 'advanced';
 export type WordStatus = 'mastered' | 'learning' | 'new';
-export type SourceLanguage = 'tagalog' | 'cebuano';
+export type SourceLanguage = 'tagalog' | 'cebuano' | 'english';
 
 export interface Word {
   id: string;

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -9,9 +9,13 @@ import { AppText } from '@/components/ui/Text';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { SkeletonList } from '@/components/ui/Skeleton';
 import { QuizOption } from '@/components/taglingo/QuizOption';
 import { useAppState } from '@/lib/app-state';
-import { buildQuiz } from '@/lib/derived';
+import { buildQuizFromDeck, type QuizQuestion } from '@/lib/derived';
+import { useWordsByLevel } from '@/features/words/api';
+import { useRecordQuizAttempt } from '@/features/quiz/api';
+import { useRecordStudySession } from '@/features/progress/api';
 import { getLevel } from '@/mocks/decks';
 import type { LevelId } from '@/mocks/words';
 import { useThemeColors } from '@/hooks/use-theme-colors';
@@ -21,24 +25,6 @@ function isLevelId(value: unknown): value is LevelId {
   return value === 'beginner' || value === 'intermediate' || value === 'advanced';
 }
 
-interface QuizSession {
-  questions: ReturnType<typeof buildQuiz>;
-  index: number;
-  correct: string[];
-  missed: string[];
-  selected: number | null;
-  resolved: boolean;
-}
-
-const initialSession = (levelId: LevelId): QuizSession => ({
-  questions: buildQuiz(levelId),
-  index: 0,
-  correct: [],
-  missed: [],
-  selected: null,
-  resolved: false,
-});
-
 export default function QuizScreen() {
   const params = useLocalSearchParams<{ level?: string }>();
   const levelId: LevelId = isLevelId(params.level) ? params.level : 'beginner';
@@ -46,9 +32,50 @@ export default function QuizScreen() {
 
   const colors = useThemeColors();
   const { actions } = useAppState();
-  const [session, setSession] = useState<QuizSession>(() => initialSession(levelId));
+  const words = useWordsByLevel(levelId);
+  const recordAttempt = useRecordQuizAttempt();
+  const recordSession = useRecordStudySession();
 
-  if (session.questions.length === 0) {
+  const questions = useMemo<QuizQuestion[]>(
+    () => buildQuizFromDeck(words.data ?? [], 10),
+    [words.data],
+  );
+
+  const [index, setIndex] = useState(0);
+  const [correct, setCorrect] = useState<string[]>([]);
+  const [missed, setMissed] = useState<string[]>([]);
+  const [selected, setSelected] = useState<number | null>(null);
+  const [resolved, setResolved] = useState(false);
+
+  // reset progress whenever the level changes (questions stay keyed to the
+  // words query, which serves each level separately)
+  const levelRef = useRef(levelId);
+  useEffect(() => {
+    if (levelRef.current === levelId) return;
+    levelRef.current = levelId;
+    setIndex(0);
+    setCorrect([]);
+    setMissed([]);
+    setSelected(null);
+    setResolved(false);
+  }, [levelId]);
+
+  if (words.isPending) {
+    return (
+      <View style={[styles.screen, { backgroundColor: colors.background }]}>
+        <ScreenHeader
+          title="Quiz"
+          onClose={() => router.replace({ pathname: '/study', params: { level: levelId } })}
+        />
+        <OfflineBanner />
+        <View style={styles.body}>
+          <SkeletonList rows={3} />
+        </View>
+      </View>
+    );
+  }
+
+  if (words.isError || questions.length === 0) {
     return (
       <View style={[styles.screen, { backgroundColor: colors.background }]}>
         <ScreenHeader
@@ -58,43 +85,49 @@ export default function QuizScreen() {
         <OfflineBanner />
         <View style={styles.body}>
           <ErrorState
-            message="This deck does not have enough words for a quiz yet."
-            onRetry={() => setSession(initialSession(levelId))}
+            message={words.isError ? undefined : 'This deck does not have enough words for a quiz yet.'}
+            onRetry={() => words.refetch()}
           />
         </View>
       </View>
     );
   }
 
-  const question = session.questions[session.index];
+  const question = questions[index];
   const answerIndex = question.options.indexOf(question.answer);
-  const isLast = session.index === session.questions.length - 1;
+  const isLast = index === questions.length - 1;
 
   const select = (optionIndex: number) => {
-    if (session.resolved) return;
-    const correct = optionIndex === answerIndex;
-    setSession({
-      ...session,
-      selected: optionIndex,
-      resolved: true,
-      correct: correct ? [...session.correct, question.word.id] : session.correct,
-      missed: correct ? session.missed : [...session.missed, question.word.id],
-    });
+    if (resolved) return;
+    const isCorrect = optionIndex === answerIndex;
+    setCorrect((prev) => (isCorrect ? [...prev, question.word.id] : prev));
+    setMissed((prev) => (isCorrect ? prev : [...prev, question.word.id]));
+    setSelected(optionIndex);
+    setResolved(true);
   };
 
   const advance = () => {
-    if (isLast) {
-      actions.recordQuiz({ correct: session.correct, missed: session.missed });
-      router.replace('/quiz-results');
+    if (!isLast) {
+      setIndex(index + 1);
+      setSelected(null);
+      setResolved(false);
       return;
     }
-    setSession({ ...session, index: session.index + 1, selected: null, resolved: false });
+    recordAttempt.mutate({
+      level: levelId,
+      score: correct.length,
+      totalQuestions: questions.length,
+      missedWordIds: missed,
+    });
+    recordSession.mutate();
+    actions.recordQuiz({ correct, missed });
+    router.replace('/quiz-results');
   };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <ScreenHeader
-        title={`Question ${session.index + 1} of ${session.questions.length}`}
+        title={`Question ${index + 1} of ${questions.length}`}
         onClose={() => router.replace({ pathname: '/study', params: { level: levelId } })}
       />
       <OfflineBanner />
@@ -104,13 +137,13 @@ export default function QuizScreen() {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.dots}>
-          {session.questions.map((q, dotIndex) => {
+          {questions.map((q, dotIndex) => {
             let dotColor = colors.mutedForeground;
             let opacity = 0.4;
-            if (dotIndex < session.index) {
-              dotColor = session.missed.includes(q.word.id) ? colors.coral : colors.primary;
+            if (dotIndex < index) {
+              dotColor = missed.includes(q.word.id) ? colors.coral : colors.primary;
               opacity = 1;
-            } else if (dotIndex === session.index) {
+            } else if (dotIndex === index) {
               dotColor = colors.primary;
               opacity = 1;
             }
@@ -138,11 +171,11 @@ export default function QuizScreen() {
         <View style={styles.options}>
           {question.options.map((option, optionIndex) => {
             let state: 'idle' | 'selected' | 'correct' | 'wrong' | 'dimmed' = 'idle';
-            if (session.resolved) {
+            if (resolved) {
               if (optionIndex === answerIndex) state = 'correct';
-              else if (optionIndex === session.selected) state = 'wrong';
+              else if (optionIndex === selected) state = 'wrong';
               else state = 'dimmed';
-            } else if (optionIndex === session.selected) {
+            } else if (optionIndex === selected) {
               state = 'selected';
             }
             return (
@@ -157,27 +190,27 @@ export default function QuizScreen() {
           })}
         </View>
 
-        {session.resolved ? (
+        {resolved ? (
           <View
             style={[
               styles.feedback,
               {
                 backgroundColor:
-                  session.selected === answerIndex ? colors.sageSoft : colors.coralSoft,
+                  selected === answerIndex ? colors.sageSoft : colors.coralSoft,
               },
             ]}
           >
             <Ionicons
-              name={session.selected === answerIndex ? 'checkmark-circle' : 'close-circle'}
+              name={selected === answerIndex ? 'checkmark-circle' : 'close-circle'}
               size={18}
-              color={session.selected === answerIndex ? colors.sage : colors.coral}
+              color={selected === answerIndex ? colors.sage : colors.coral}
             />
             <AppText
               variant="body"
               bold
-              color={session.selected === answerIndex ? 'sage' : 'coral'}
+              color={selected === answerIndex ? 'sage' : 'coral'}
             >
-              {session.selected === answerIndex
+              {selected === answerIndex
                 ? 'Correct'
                 : `Correct answer: ${question.answer}`}
             </AppText>
@@ -188,7 +221,7 @@ export default function QuizScreen() {
           <Button
             variant="sage"
             size="block"
-            disabled={!session.resolved}
+            disabled={!resolved}
             onPress={advance}
           >
             {isLast ? 'See results' : 'Next question'}

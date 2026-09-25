@@ -36,7 +36,11 @@ export default function StudyScreen() {
   const router = useRouter();
   const theme = useThemeColors();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ level?: string; start?: string }>();
+  const params = useLocalSearchParams<{
+    level?: string;
+    start?: string;
+    review?: string;
+  }>();
   const level = getLevel(params.level);
   const offline = useIsOffline();
 
@@ -50,10 +54,24 @@ export default function StudyScreen() {
   const favorites = snapshot.data?.favorites ?? [];
 
   const words = useWordsByLevel(level.id);
-  const deck = useMemo(
-    () => studyOrder(words.data ?? [], snapshotStatus ?? {}),
-    [words.data, snapshotStatus],
-  );
+  const reviewIds = useMemo(() => {
+    const raw = params.review;
+    if (!raw) return null;
+    const ids = raw
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    return ids.length ? new Set(ids) : null;
+  }, [params.review]);
+
+  const deck = useMemo(() => {
+    const ordered = studyOrder(words.data ?? [], snapshotStatus ?? {});
+    if (!reviewIds) return ordered;
+    // "Review these" (quiz results) narrows the deck to just the missed words;
+    // falls back to the full deck when none of those ids resolve.
+    const narrowed = ordered.filter((word) => reviewIds.has(word.id));
+    return narrowed.length > 0 ? narrowed : ordered;
+  }, [words.data, snapshotStatus, reviewIds]);
 
   const [index, setIndex] = useState(0);
   const levelRef = useRef(level.id);

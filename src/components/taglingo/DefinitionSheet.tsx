@@ -36,7 +36,7 @@ function SheetRow({
 
 /**
  * Definition Lookup bottom sheet (functionality prompt §5). Loading while the
- * (mock) request is in flight; a `{ found: false }` response renders the
+ * live request is in flight; a `{ found: false }` response renders the
  * graceful "no definition" state, never a generic error screen.
  */
 export function DefinitionSheet({
@@ -54,7 +54,8 @@ export function DefinitionSheet({
 }) {
   const theme = useThemeColors();
   const insets = useSafeAreaInsets();
-  const definition = useDefinition(visible ? word?.id : undefined);
+  const definition = useDefinition(visible ? word : undefined);
+  const shown = definition.data?.found ? definition.data.word : undefined;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -121,17 +122,17 @@ export function DefinitionSheet({
               ) : (
                 <View style={styles.rows}>
                   <SheetRow icon="book-outline" label="English">
-                    <AppText variant="label">{word.english}</AppText>
+                    <AppText variant="label">{shown?.english ?? word.english}</AppText>
                   </SheetRow>
                   <SheetRow icon="text-outline" label="Part of speech">
-                    <AppText variant="label">{word.partOfSpeech}</AppText>
+                    <AppText variant="label">{shown?.partOfSpeech ?? word.partOfSpeech}</AppText>
                   </SheetRow>
                   <SheetRow icon="information-circle-outline" label="Definition">
-                    <AppText variant="label">{word.definition}</AppText>
+                    <AppText variant="label">{shown?.definition ?? word.definition}</AppText>
                   </SheetRow>
                   <SheetRow icon="chatbubble-ellipses-outline" label="Example">
                     <AppText variant="label" style={styles.italic}>
-                      {word.example.text}
+                      {shown?.example.text ?? word.example.text}
                     </AppText>
                     <AppText variant="label" muted style={styles.exampleEnglish}>
                       {word.example.english}

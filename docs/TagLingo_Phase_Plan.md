@@ -88,10 +88,10 @@ Implementation (2026-09-27):
 ---
 
 ## Phase 5 — Definition Lookup & Quiz Mode (wire the real thing)
-- [ ] Definition Lookup calls the Free Dictionary API live on tap, renders definition/part of speech/example
-- [ ] Quiz Mode: generate a 10-question multiple-choice quiz from `words` at the selected level; distractors pulled from the same level
-- [ ] Quiz Results: score + missed-word list, "Review these" deep-links back into Study filtered to those words
-- [ ] Quiz attempts recorded in `quiz_attempts` (separate from `word_progress` — quiz results don't auto-mark a word Mastered, per the project's design decision)
+- [x] Definition Lookup calls the Free Dictionary API live on tap, renders definition/part of speech/example
+- [x] Quiz Mode: generate a 10-question multiple-choice quiz from `words` at the selected level; distractors pulled from the same level
+- [x] Quiz Results: score + missed-word list, "Review these" deep-links back into Study filtered to those words
+- [x] Quiz attempts recorded in `quiz_attempts` (separate from `word_progress` — quiz results don't auto-mark a word Mastered, per the project's design decision)
 
 **Exit criterion:** a full quiz can be taken end to end with a real score, and a missed word can be reviewed directly from the results screen.
 

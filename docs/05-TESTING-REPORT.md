@@ -85,6 +85,30 @@ Re-run these before considering any phase in `01-PHASE-PLAN.md` that touches `wo
 **Expected:** mastered count, streak, level completion % and the My Words filter reflect the grades immediately without a pull-to-refresh (mutations update `word_progress` and invalidate the `progress`/`words` query keys).
 **Status:** ☐ (code + DB-layer verified 2026-09-27 — CP-11/CP-12; the pleasing part of the exit criterion needs the same on-device login as CP-10.)
 
+## Definition Lookup & Quiz Mode — Phase 5 (wire the real thing)
+
+> Scope: `useDefinition` now calls the Free Dictionary API live and maps part of
+> speech / definition / example onto the tapped word; Quiz Mode builds questions
+> from the real `words` of the selected level (same-level distractors via
+> `buildQuizFromDeck`); finishing records one `quiz_attempts` row plus the daily
+> `study_sessions` touch, and "Review these" deep-links into Study pre-filtered
+> to the missed word IDs.
+
+### CP-14 — Definition Lookup hits the live Free Dictionary API and degrades gracefully
+**Steps:** open Definition Lookup for a seeded word; then force the no-match and network-failure paths.
+**Expected:** a matched word renders definition/part of speech/example (English) filled from the API response; a phrase the API has no entry for, a 404, or a dropped request renders "No definition available for this word right now" — never a generic error screen. The header/word identity (cebuano, tagalog, favorite) stays intact in both states.
+**Status:** ✅ (code verified 2026-09-27 — `useDefinition(word)` fetches `https://api.dictionaryapi.dev/api/v2/entries/en/:english`, maps the first meaning, and resolves `{ found: false }` on non-OK / no-usable-meaning / any thrown network error; `DefinitionSheet` renders the enriched word and keeps the graceful miss branch. **Note:** the API returned 522 (Cloudflare origin down) for every request during the verification window — the hook's catch path handled it exactly as designed, which is the CP-06 behavior carried into the live path. Full on-device definition render pending the same login as CP-10.)
+
+### CP-15 — Quiz questions come from the selected level, distractors from the same level
+**Steps:** enter Quiz Mode from Beginner, Intermediate and Advanced; answer all questions; open Quiz Results.
+**Expected:** every question word belongs to the selected level; the correct answer is its English value and the 3 distractors are other English values from the same level (never another level); the results ring and headline match the tracked correct/missed counts, and the missed-word list resolves real word ids from `words`.
+**Status:** ✅ (code verified 2026-09-27 — `quiz.tsx` builds questions via `buildQuizFromDeck(useWordsByLevel(level).data, 10)`, the same pure generator unit-checked in CP-03; results reads `state.lastQuiz` and resolves missed ids against `useAllWords`. On-device run pending CP-10 login.)
+
+### CP-16 — Quiz attempts land in `quiz_attempts` and never touch `word_progress`
+**Steps:** as an authenticated client (simulated JWT claims), insert the exact row the app's `useRecordQuizAttempt` writes, then check isolation and that no `word_progress` row is implied.
+**Expected:** owner sees their `quiz_attempts` row; another sub sees zero rows and cannot forge one; the `word_progress` table has no row for any quizzed-but-never-graded word — completing a quiz never auto-marks anything Mastered.
+**Status:** ✅ (verified live 2026-09-27 on project `wvquienibojiphxamgnr` — owner insert with `score`/`total_questions`/`missed_word_ids` returned `owner_visible: 1`; cross-sub read returned `0`; the forgery insert was rejected by RLS WITH CHECK (`other_user_sees_all: 0`); test users/etc. cascaded cleanly. `useRecordQuizAttempt` also invalidates the progress keys on settle; the mock path remains a no-op since the results screen reads `state.lastQuiz`.)
+
 ## Streak & Aggregate Correctness Tests
 
 ### PS-01 — Streak counts consecutive days correctly
@@ -121,3 +145,4 @@ Re-run these before considering any phase in `01-PHASE-PLAN.md` that touches `wo
 - **2026-09-25 (Phase 2 — live Supabase):** schema + seed applied to project `wvquienibojiphxamgnr` (`20260925000000_schema.sql`, `20260925000001_seed_words.sql`; migrations tracked in `supabase_migrations.schema_migrations`). Verified live: seed split Beginner 10 / Intermediate 8 / Advanced 5; CP-01 and CP-02 pass via PostgREST (see above); all other tables RLS-enabled with expected policies; anon/service-role behavior confirmed. PS-01 still deferred (Phase 4).
 - **2026-09-26 (Phase 3 — Clerk auth, DB layer):** migration `20260926000000_clerk_auth.sql` applied and registered; `src/types/database.ts` regenerated (users.id text, ensure_user RPC). CP-08 + CP-09 verified live at the SQL level inside rolled-back transactions with `set role authenticated` + simulated Clerk `request.jwt.claims`. Code wiring (auth facade, Clerk-bound Supabase client, email-code/OAuth login, Profile/Settings) typechecks and lints clean; CP-10 device verification deferred to the dashboard activation steps.
 - **2026-09-27 (Phase 4 — Flashcard Study & Progress):** migration `20260927000000_progress_word_status.sql` applied and registered; `src/types/database.ts` updated (`'new'` status). CP-11 + CP-12 verified live under simulated Clerk JWT claims — grade upserts, favorite lifecycle (delete-new / keep-graded), cross-sub isolation, and idempotent daily study-session upserts all behaved as designed. PS-01 confirmed at the data level. `tsc --noEmit`, `expo lint`, `expo-doctor` 21/21 clean. CP-13 (device) deferred with CP-10 — login on Expo Go closes both exit criteria.
+- **2026-09-27 (Phase 5 — Definition Lookup & Quiz Mode):** `useDefinition` wired to the Free Dictionary API live (graceful `{ found: false }` on 404/network error — verified against a live 522 outage for exactly this behavior); `buildQuizFromDeck` builds from real per-level words; `quiz.tsx` records attempts via the new `useRecordQuizAttempt` + daily `study_sessions` touch; "Review these" passes the missed-word IDs and `study.tsx` filters to them. CP-14/CP-15 code-verified, CP-16 verified live under simulated JWT claims (owner insert OK, cross-sub isolation, RLS blocked a forged row, clean cascade). `tsc --noEmit`, `expo lint`, `expo-doctor` 21/21 clean. On-device run still gated on the CP-10 login.

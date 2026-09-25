@@ -105,29 +105,28 @@ Auth note (Phase 3): Supabase is configured as the **Clerk third-party-auth prov
 ## 6. Quiz Generation Logic
 
 1. User selects a level on Browse by Level → taps into Quiz Mode.
-2. Pick 10 random words from `words` where `level = selected level` (excluding recently-quizzed words where practical, not required for v1).
+2. Pull `words` for the selected level and pick up to 10 random words (a level smaller than 10 yields one question per word).
 3. For each question word: the correct answer is its `english` value; 3 distractors are randomly pulled from **other words in the same level** (never a different level — this keeps difficulty consistent, per the original design decision).
-4. On quiz completion: insert one `quiz_attempts` row with `score`, `total_questions = 10`, and `missed_word_ids`.
-5. Quiz Results screen reads `missed_word_ids`, joins back to `words` for display, and "Review these" deep-links into Flashcard Study Mode pre-filtered to just those word IDs.
+4. On quiz completion: insert one `quiz_attempts` row with `score`, `total_questions` (the actual question count), and `missed_word_ids`. A finished quiz also touches `study_sessions` for the streak (§3.4) but never `word_progress`.
+5. Quiz Results screen reads the in-memory attempt (`state.lastQuiz`, §3.5), joins `missed_word_ids` back to `words` for display, and "Review these" deep-links into Flashcard Study Mode pre-filtered to just those word IDs.
 
 ## 7. Definition Lookup API Contract
 
-### `GET /api/definitions/:word`
-Next.js API Route, called from the client when a user taps a word's English translation.
+Mobile ships no API route — React Native has no browser CORS, so the client calls the Free Dictionary API directly (`https://api.dictionaryapi.dev/api/v2/entries/en/:word`) when a user taps a word's English translation (Expo screen `DefinitionSheet`). This matches the original web prototype's `GET /api/definitions/:word` contract:
 
 **Behavior:**
-1. Validate `:word` is a non-empty, reasonably short string (basic sanitization — this is a public-facing proxy endpoint).
-2. Call the Free Dictionary API (`https://api.dictionaryapi.dev/api/v2/entries/en/:word`) server-side.
-3. Normalize the response to:
+1. Validate `:word` — from a seeded DB `words.english` value, so it is always a non-empty, reasonably short string.
+2. Call the Free Dictionary API live.
+3. Normalize the response to fill in the Word's display-only fields:
 ```json
 {
-  "word": "salamat",
+  "word": "thank you",
   "partOfSpeech": "interjection",
   "definition": "used to express gratitude or polite appreciation.",
-  "example": "Salamat kaayo sa imong tabang."
+  "example": "Thank you for your help."
 }
 ```
-4. If the Free Dictionary API returns no match or errors, respond with `{ "found": false }` rather than a 500 — the client shows a graceful "No definition available" state, not an error screen (see `07-FUNCTIONALITY-PROMPT.md` §5).
+4. If the Free Dictionary API returns no match, an unparseable response, or fails at the network level, resolve `{ "found": false }` rather than an error — the client shows a graceful "No definition available" state, never an error screen (see `07-FUNCTIONALITY-PROMPT.md` §5).
 
 This is the **only** live third-party API call in the system. Tagalog and Cebuano vocabulary pairs are pre-seeded (§3.2) — there is no live translation call for the Filipino-language side of any card.
 

@@ -5,8 +5,8 @@
  * the no-keys demo path still works.
  *
  * Display-only fields (partOfSpeech, definition, example) don't exist in the
- * DB yet — `mapWord` leaves them empty and Phase 5 (definition lookup) fills
- * them in from the Free Dictionary API.
+ * DB yet — `useDefinition` fills them in live from the Free Dictionary API
+ * (Phase 5) when a word's English translation is tapped.
  */
 
 import { useQuery } from '@tanstack/react-query';
@@ -16,7 +16,6 @@ import { useSupabaseClient } from '@/lib/supabase';
 import { sleep } from '@/lib/utils';
 import { levels, wordsInLevel } from '@/mocks/decks';
 import {
-  findWord,
   words,
   type LevelId,
   type Word,
@@ -26,17 +25,29 @@ import type { Database } from '@/types/database';
 
 const LATENCY = 350;
 
+/** Free Dictionary API — the only live third-party call (02-ARCHITECTURE §7). */
+const DEFINITIONS_BASE = 'https://api.dictionaryapi.dev/api/v2/entries/en';
+
 export type WordFilter = 'all' | WordStatus | 'favorites';
 type WordRow = Database['public']['Tables']['words']['Row'];
+type DbLevel = Database['public']['Enums']['level'];
 
-const LEVEL_TO_ID: Record<Database['public']['Enums']['level'], LevelId> = {
+const LEVEL_TO_ID: Record<DbLevel, LevelId> = {
   Beginner: 'beginner',
   Intermediate: 'intermediate',
   Advanced: 'advanced',
 };
 
-const levelFromDb = (value: Database['public']['Enums']['level']): LevelId =>
-  LEVEL_TO_ID[value];
+const LEVEL_NAMES: Record<LevelId, DbLevel> = {
+  beginner: 'Beginner',
+  intermediate: 'Intermediate',
+  advanced: 'Advanced',
+};
+
+const levelFromDb = (value: DbLevel): LevelId => LEVEL_TO_ID[value];
+
+/** LevelId -> the enum value used by the `words.level` / `quiz_attempts.level` columns. */
+export const levelToDb = (levelId: LevelId): DbLevel => LEVEL_NAMES[levelId];
 
 /** DB `words` row -> the Word shape screens render. */
 export function mapWord(row: WordRow): Word {
@@ -130,16 +141,10 @@ export function useWordsByLevel(levelId: LevelId) {
         await sleep(LATENCY);
         return wordsInLevel(levelId);
       }
-      const levelName: Database['public']['Enums']['level'] =
-        levelId === 'beginner'
-          ? 'Beginner'
-          : levelId === 'intermediate'
-            ? 'Intermediate'
-            : 'Advanced';
       const { data, error } = await supabase
         .from('words')
         .select('*')
-        .eq('level', levelName)
+        .eq('level', levelToDb(levelId))
         .order('english', { ascending: true });
       if (error) throw error;
       return data.map(mapWord);
@@ -148,22 +153,60 @@ export function useWordsByLevel(levelId: LevelId) {
 }
 
 /**
- * Definition lookup — still the mock stand-in for `GET /api/definitions/:word`
- * (architecture doc §7). Wired to the Free Dictionary API in Phase 5. Words
- * flagged `mockLookupFails` simulate `{ found: false }`; unknown ids (e.g.
- * live DB words without definitions yet) return the same graceful miss.
+ * First entry of the Free Dictionary API response normalized onto a Word copy
+ * with its display-only fields filled in. `null` when no entry has a meaning.
  */
-export function useDefinition(wordId: string | undefined) {
+function mapDictionaryEntry(word: Word, entry: DictionaryEntry): Word | null {
+  const meaning = entry.meanings?.[0];
+  const first = meaning?.definitions?.[0];
+  if (!meaning || !first) return null;
+  return {
+    ...word,
+    partOfSpeech: meaning.partOfSpeech ?? '',
+    definition: first.definition ?? '',
+    example: {
+      language: 'english',
+      text: first.example ?? '',
+      english: '',
+    },
+  };
+}
+
+interface DictionaryEntry {
+  word?: string;
+  meanings?: {
+    partOfSpeech?: string;
+    definitions?: { definition?: string; example?: string }[];
+  }[];
+}
+
+/**
+ * Definition lookup — Phase 5: calls the Free Dictionary API live for the
+ * word's English translation (02-ARCHITECTURE §7). A 404, an entry with no
+ * usable meaning, or any network failure resolves to `{ found: false }` so the
+ * UI can render the graceful "no definition" state — never a generic error.
+ */
+export function useDefinition(word: Word | undefined) {
   return useQuery({
-    queryKey: ['definition', wordId],
-    enabled: Boolean(wordId),
+    queryKey: ['definition', word?.id],
+    enabled: Boolean(word?.english),
     staleTime: 60_000,
     queryFn: async (): Promise<DefinitionResult> => {
-      await sleep(700);
-      const word = findWord(wordId);
       if (!word) return { found: false };
-      if (word.mockLookupFails) return { found: false };
-      return { found: true, word };
+      const english = word.english.trim();
+      if (!english) return { found: false };
+      try {
+        const response = await fetch(
+          `${DEFINITIONS_BASE}/${encodeURIComponent(english)}`,
+          { headers: { accept: 'application/json' } },
+        );
+        if (!response.ok) return { found: false };
+        const entries = (await response.json()) as DictionaryEntry[];
+        const enriched = entries.map((entry) => mapDictionaryEntry(word, entry)).find(Boolean);
+        return enriched ? { found: true, word: enriched } : { found: false };
+      } catch {
+        return { found: false };
+      }
     },
   });
 }

@@ -80,13 +80,15 @@ export interface QuizQuestion {
 
 /**
  * Builds a fixed set of questions so option order never changes on re-render.
- * Distractors are pulled from the same level only (architecture doc §6).
+ * Distractors are pulled from the same deck only (architecture doc §6). When
+ * the deck is smaller than `count`, every word becomes a question. Phase 5
+ * callers pass a real word deck (via `useWordsByLevel`).
  */
-export const buildQuiz = (levelId: LevelId, count = 10): QuizQuestion[] => {
-  const deck = shuffle(wordsInLevel(levelId)).slice(0, count);
-  const pool = [...new Set(wordsInLevel(levelId).map((word) => word.english))];
+export const buildQuizFromDeck = (deck: Word[], count = 10): QuizQuestion[] => {
+  const picked = shuffle(deck).slice(0, count);
+  const pool = [...new Set(deck.map((word) => word.english))];
 
-  return deck.map((word) => {
+  return picked.map((word) => {
     const distractors = shuffle(
       pool.filter((english) => english !== word.english),
     ).slice(0, 3);
